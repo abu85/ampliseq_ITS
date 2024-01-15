@@ -1,20 +1,8 @@
-# ampliseq_ITS
-### nfcore/ampliseq
----------- Abu Bakar Siddique, PhD
+# Bioinformatic analysis with [nf-core/ampliseq](https://nf-co.re/ampliseq/2.3.2) pipeline
 
-## create 
+### nfcore/ampliseq pipeline summary
 
-Nextflow and nf-core
-Learning outcomes
-
-To understand the basic components in a Nextflow run
-
-To understand the difference between Nextflow and nf-core
-
-To be able to find relevant nf-core pipelines
-
-
-
+---------- Abu Bakar Siddique, PhD, SLUBI, SLU
 
 ##### 01. Tmux ------------------------------
 Tmux is a tool that will allow you to start any pipeline or workflow and run it in the background, allowing you to do other stuff during long calculations. As an added bonus, it will keep your processes going if you leave the server or your connection is unstable and crashes. First you needs to be log in virtual (mycase UPPMAX’s module system), after which you can initiate a new terminal in tmux by following commands:
@@ -35,9 +23,7 @@ To kill a tmux session and stop any process running in it, press Ctrl+B, release
 All of this might seem to add unnecessary hassle but tmux is extremely valuable when working on a server. Instead of having to redo a long list of computational step when the connection to a server inevitably crashes, just reconnect to the ongoing tmux session and you are back exactly where you were when the crash happened! Tmux actually can do even more useful things, so if you want to know more, have a look at this quick and easy guide to tmux:https://www.hamvocke.com/blog/a-quick-and-easy-guide-to-tmux/.
 
 
-
-
-##### 02. Setup: Nextflow ---------------------------
+##### 02. Setup: Nextflow (Nextflow	21.10.6)
 
 Installation
 
@@ -262,77 +248,7 @@ Use Linux line endings (\n), not windows (\r\n)
 If using single end data, keep the empty column for the second FastQ file
 
 ### 06.1.3. Running the pipeline
-Once you’ve got your sample sheet ready, you can launch the analysis! For this, try to figure out the command you should run from the chip_seq_analysis folder. Try to execute the chipseq pipeline with version 1.2.2 using the FastQ files you just linked to.
-
-Remember the core Nextflow flags that you will need (one hyphen!)
-
--profile uppmax
-
-Remember the pipeline specific parameter flags that you will need (two hyphens!)
-
---project g2021025
-
---clusterOptions '--reservation g2021025_28'
-
---genome GRCh38
-
---input samplesheet.csv
-
---single_end
-
-If all goes well, your pipeline will run and kick off lots of jobs and merrily process the data! Once it’s finished, take a look in the results folder and see what it generated. Again, this might take a while due to the job queue (1 hour +), so feel free to detach from the tmux session and return later.
-
-# CHiP command:
-nextflow run $NF_CORE_PIPELINES/chipseq/1.2.2/workflow -profile uppmax --project g2021025 --clusterOptions '--reservation g2021025_28' --genome GRCh38 --input samplesheet.csv --single_end
-
-
-
-#### 06.2. Methyl-seq
-nf-core/methylseq is an analysis pipeline used for methylation (Bisulfite) sequencing data. It pre-processes raw data from FastQ inputs, aligns the reads and extract methylation calls and performs extensive quality-control on the results. The default workflow uses Bismark with Bowtie2 as alignment tool: unless specified otherwise, nf-core/methylseq will run this pipeline.
-
-### Example data
-We have prepared some example data that has been subsampled to make them small and quick to run, and are supplied as gzipped (compressed) FastQ files here: /sw/courses/epigenomics/DNAmethylation/pipeline_bsseq_data/Sample1_PE_R[1,2].fastq.gz. This is mouse data so remember to use the correct genome to map to.
-
-### 06.2.1. Running the pipeline
-Begin with making a fresh analysis directory in your home directory
-
-cd /proj/g2021025/nobackup/$USER
-mkdir methylseq_analysis
-cd methylseq_analysis
-In this folder you can launch the analysis! For this, try to figure out the command you should run. Try to execute the methylseq pipeline with version 1.6.1 using the FastQ files you just linked to.
-
-Remember the core Nextflow flags that you will need (one hyphen!)
-
--profile uppmax
-
-Figure out the pipeline specific parameter flags that you will need (two hyphens!). Have a look at the list of parameters to get an idea which options are possible and make sure to use the essential parameters.
-
---input '/sw/courses/epigenomics/DNAmethylation/pipeline_bsseq_data/Sample1_PE_R{1,2}.fastq.gz'
-
---aligner bismark
-
---project g2021025
-
---clusterOptions '--reservation g2021025_28'
-
---genome mm10
-
-If all goes well, your pipeline will run and kick off lots of jobs and merrily process the data! Once it’s finished, take a look in the results folder and see what it generated. A description of the outputs can be seen here. Again, this might take a while due to the job queue (1 hour +), so feel free to detach from the tmux session and return later.
-
-#minimal methylseq command:
-nextflow run $NF_CORE_PIPELINES/methylseq/1.6.1/workflow -profile uppmax --input '/sw/courses/epigenomics/DNAmethylation/pipeline_bsseq_data/Sample1_PE_R{1,2}.fastq.gz' --aligner bismark --project g2021025 --genome mm10 --clusterOptions '--reservation g2021025_28'
-
-
-
-##### 8. Getting help------------------
-Please have a look at the nf-core website to see which pipelines are available (53 as of now!) and browse their thorough documentation.
-
-Remember that you’re not on your own! If you’re still struggling after checking the documentation, jump on to the nf-core Slack and ask for help.
-
-Every pipeline has it’s own Slack channel (eg. #atacseq, #chipseq etc) where people will be happy to help.
-
-
-
+Once you’ve got your sample sheet ready, you can launch the analysis! 
 
 #####################3  amplicon sequencing real run ############ 
 ##################################################################
@@ -359,7 +275,6 @@ export NXF_TEMP=${SNIC_TMP:-$HOME/glob/nxftmp}
 tmux attach -t ampliseq
 
 
-
 nextflow run nf-core/ampliseq --input /proj/snic2022-22-289/nobackup/abu/ampliseq_its/input_files -profile uppmax --max_cpus 20 --max_memory 36.GB --project snic2022-22-289 --FW_primer GCATCGATGAAGAACGCAGC --RV_primer TCCTCCGCTTATTGATATGC --dada_ref_taxonomy unite-fungi --cut_dada_ref_taxonomy --qiime_ref_taxonomy unite-fungi --email abu.siddique@slu.se --metadata /proj/snic2022-22-289/nobackup/abu/ampliseq_its/samplesheet.tsv --cut_its its2 --illumina_pe_its --trunclenf 223 --trunclenr 162 --exclude_taxa "mitochondria,chloroplast,archea,bacteria" --min_frequency 1 --min_samples 1 -bg -resume --outdir /proj/snic2022-22-289/nobackup/abu/ampliseq_its/real_run/results --ignore_empty_input_files --skip_ancom --ignore_failed_trimming > amplseq_real_run_full_log_x.txt
 
 
@@ -369,7 +284,7 @@ Ctrl+B, release, press D
 
 OneDrive - Umeå universitet
 
-cd /mnt/c/Users/auue0001/OneDrive\ \-\ \Umeå\ \universitet/Onedrive_21_01_2020/SwAsp_metagenom/results
+cd /mnt/c/Users/user_id/OneDrive\ \-\ \Umeå\ \universitet/Onedrive_21_01_2020/SwAsp_metagenom/results
 
 scp -r abusiddi@rackham.uppmax.uu.se:/proj/snic2022-22-289/nobackup/abu/ampliseq_its/real_run/results .
 
