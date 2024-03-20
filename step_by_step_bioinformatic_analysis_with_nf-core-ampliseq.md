@@ -1,6 +1,8 @@
 # Bioinformatic analysis with [nf-core/ampliseq](https://nf-co.re/ampliseq/2.3.2) pipeline
 
-### nfcore/ampliseq pipeline summary for the paper
+### step_by_step_bioinformatic_analysis_with_nf-core-ampliseq
+This analysis was with the following paper:
+
 Genotypes, Tannin Capacity, and Seasonality Influence the Structure and Function of Symptomless Fungal Communities in Aspen Leaves, Regardless of Historical Nitrogen Addition
 Abu Bakar Siddique2, Abu Bakar Siddique1,3,  Lovely Mahawar1,  Benedicte Riber Albrectsen1*
 
@@ -9,9 +11,9 @@ Abu Bakar Siddique2, Abu Bakar Siddique1,3,  Lovely Mahawar1,  Benedicte Riber A
 3. Tasmanian Institute of Agriculture (TIA), University of Tasmania, Prospect 7250, Tasmania, Australia.
 *Correspondence: benedicte.albrectsen@umu.se 
 
----------- Abu Bakar Siddique, PhD, SLUBI, SLU
+---------- Abu Bakar Siddique, Dr.rer.nat., SLUBI, SLU
 
-#### Set the environment
+#### Set the hpc or pc environment
 ##### 01. Setup: Tmux module ------------------------------
 Tmux is a tool that will allow you to start a new terminal or WSL screen with any pipeline or workflow and run it in the background, allowing you to do other stuff during long calculations. As an added bonus, it will keep your processes going if you leave the server or your connection is unstable and crashes. 
 First you needs to be log in virtual computer cluster (mycase UPPMAX’s module system or HPC) with ssh, after which you can initiate a new terminal in tmux by following commands:
