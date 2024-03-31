@@ -22,7 +22,7 @@ Abu Bakar Siddique2, Abu Bakar Siddique1,3,  Lovely Mahawar1,  Benedicte Riber A
 3. [nf-core module setup](#sec3)</br>
     
 4. [Running a test workflow](#sec4)</br>
-    4.1 [### 4.1. Trying out ampliseq](#sec4.1)</br>
+    4.1 [Trying out ampliseq](#sec4.1)</br>
     4.1.2 [Things to look out for](#sec4.1.2)</br> 
 5. [Running a nf-core/ampliseq workflow ](#sec5)</br>
     5.1. [Example data, samplesheet preparation](#sec5.1)</br>
@@ -169,6 +169,7 @@ nextflow pull nf-core/ampliseq
 ## 4. Running a test workflow
 It’s always a good idea to start working with a tiny test workflow when using a new Nextflow pipeline. This confirms that everything is set up and working properly, before you start moving around massive data files. To accommodate this, all nf-core pipelines come with a configuration profile called test which will run a minimal test dataset through the pipeline without needing any other pipeline parameters.
 
+<a name="sec4.1."></a>
 ### 4.1. Trying out ampliseq
 To try out for example the nf-core/ampliseq pipeline and see if everything is working, let’s try the test dataset.
 
@@ -220,6 +221,7 @@ As the pipeline runs, it saves the final files it generates to results (customis
 rm -rf work/
 
 
+<a name="sec4.1.2"></a>
 ### 4.1.2. Re-running a pipeline with '-resume'
 Nextflow is very clever about using cached copies of pipeline steps if you re-run a pipeline.
 
@@ -228,7 +230,7 @@ Once the test workflow has finished or you have canceled it the middle of its ex
 This option is very useful if a pipeline fails unexpectedly, as it allows you to start again and pick up where you left off.
 
 
-### 4.1.3. Read the docs
+#### Read the docs
 The documentation for nf-core pipelines is a big part of the community ethos.
 
 Whilst the test dataset is running (it’s small, but the UPPMAX job queue can be slow), check out the nf-core website. Every pipeline has its own page with extensive documentation. For example, the ampliseq docs are at [https://nf-co.re/ampliseq](https://nf-co.re/ampliseq)
