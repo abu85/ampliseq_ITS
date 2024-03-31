@@ -12,14 +12,36 @@ Abu Bakar Siddique2, Abu Bakar Siddique1,3,  Lovely Mahawar1,  Benedicte Riber A
 *Correspondence: benedicte.albrectsen@umu.se 
 
 ---------- Abu Bakar Siddique, Dr.rer.nat., SLUBI, SLU
+<font size=20>__COI ampliseq analysis with nf-core/ampliseq pipeline (step by step)__</font>
 
-#### Set the hpc or pc environment
-##### 01. Setup: Tmux module ------------------------------
-Tmux is a tool that will allow you to start a new terminal or WSL screen with any pipeline or workflow and run it in the background, allowing you to do other stuff during long calculations. As an added bonus, it will keep your processes going if you leave the server or your connection is unstable and crashes. 
+1. [Prepare HPC (here its Uppmax) & environment](#sec1) </br>
+    1.1. [Log in](#sec1.1)</br>
+    1.2. [Background (Tmux) set up](#sec1.2)</br>
+2. [Nextflow setup](#sec2)</br>
+    
+3. [nf-core module setup](#sec3)</br>
+    
+4. [Running a test workflow](#sec4)</br>
+    4.1 [### 4.1. Trying out ampliseq](#sec4.1)</br>
+    4.1.2 [Things to look out for](#sec4.1.2)</br> 
+5. [Running a nf-core/ampliseq workflow ](#sec5)</br>
+    5.1. [Example data, samplesheet preparation](#sec5.1)</br>
+    5.1.1 [Samplesheet preparation](#sec5.1.1)</br>
+    5.1.2 [Things to look out for](#sec5.1.2)</br>
+6. [Final ampliseq script ](#sec6)</br>
+
+<a name="sec1"></a>
+## 1. Prepare HPC (here its Uppmax) & environment
+<a name="sec1.1"></a>
+### 1.1. Log in in HPC (UPPMAX)
 First you needs to be log in virtual computer cluster (mycase UPPMAX’s module system or HPC) with ssh, after which you can initiate a new terminal in tmux by following commands:
 
-```ssh username@rackham.uppmax.uu.se # change username and HPC```
-
+```
+ssh username@rackham.uppmax.uu.se # change 'username' and 'rackham.uppmax.uu.se'
+```
+<a name="sec1.2"></a>
+### 1.2. Background or Tmux set up 
+Tmux is a tool that will allow you to start a new terminal or WSL screen with any pipeline or workflow and run it in the background, allowing you to do other stuff during long calculations. As an added bonus, it will keep your processes going if you leave the server or your connection is unstable and crashes. 
 ```
 module load tmux # loading the tmux module
 tmux new -s ampliseq_its # or any other name you like
@@ -37,8 +59,8 @@ To kill a tmux session and stop any process running in it, press Ctrl+B, release
 
 All of this might seem to add unnecessary hassle but tmux is extremely valuable when working on a server. Instead of having to redo a long list of computational step when the connection to a server inevitably crashes, just reconnect to the ongoing tmux session and you are back exactly where you were when the crash happened! Tmux actually can do even more useful things, so if you want to know more, have a look at this quick and easy guide to tmux:https://www.hamvocke.com/blog/a-quick-and-easy-guide-to-tmux/.
 
-
-##### 02. Setup: Nextflow module (Nextflow	21.10.6)
+<a name="sec2"></a>
+##### 2. Nextflow setup (Nextflow	21.10.6)
 
 Installation
 ```
@@ -47,7 +69,7 @@ module load uppmax bioinfo-tools    # Base UPPMAX environment modules, needed fo
 module load Nextflow                # Note: Capital N!
 ```
 
-Alternatively, to install yourself on your PC (when not on UPPMAX for example):
+Alternatively, to install nextflow yourself on your PC (when not on UPPMAX for example), try:
 
 ```
 cd ~/bin    # Your home directory bin folder - full of binary executable files, already on your PATH
@@ -61,14 +83,14 @@ export NXF_HOME=$HOME/nxf-home
 export NXF_TEMP=${SNIC_TMP:-$HOME/glob/nxftmp}
 Upon execution of the command, $USER will be replaced with your login name.
 
-My case:
+My case these three commands were look like this:
 ```
 export NXF_OPTS='-Xms1g -Xmx4g'
 export NXF_HOME=$/proj/snic2022-22-289/nobackup/abu/ampliseq_its/real_run/
 export NXF_TEMP=${SNIC_TMP:-$HOME/glob/nxftmp}
 ```
 
-##### Check that Nextflow works ---------------------------
+##### Check that Nextflow works
 It’s always good to have a mini test to check that everything works.
 
 These pipelines can create large temporary files and large result files, so we will do these exercises in the project folder. Make a new directory there and run the Nextflow test command as follows:
@@ -99,8 +121,8 @@ Hola world!
 Succes!
 
 
-
-#### 04. Setup: nf-core module -----------------------------------
+<a name="sec3"></a>
+### 3. nf-core module setup
 Recently, all nf-core pipelines have been made available on UPPMAX (rackham and Bianca) so they can be run on these servers without any additional setup besides loading the nf-core-pipelines module.
 
 ```
@@ -139,12 +161,15 @@ Note
 
 nf-core also comes as a Python package that is totally separate to Nextflow and is not required to run Nextflow pipelines. It does however offer some convenience functions to make your life a little easier. A description on how to install this package can be found here. This is useful if you want to run nf-core pipelines outside of UPPMAX or want to use some of the convenience functions included in the nf-core package.
 
-
-
-##### 05. Running a test workflow-------------------------------
+If your hpc or PC do not have them you must load them ahead of running the actual commands written bellow
+```
+nextflow pull nf-core/ampliseq
+``` 
+<a name="sec4"></a>
+## 4. Running a test workflow
 It’s always a good idea to start working with a tiny test workflow when using a new Nextflow pipeline. This confirms that everything is set up and working properly, before you start moving around massive data files. To accommodate this, all nf-core pipelines come with a configuration profile called test which will run a minimal test dataset through the pipeline without needing any other pipeline parameters.
 
-#### 05.1. Trying out ampliseq
+### 4.1. Trying out ampliseq
 To try out for example the nf-core/ampliseq pipeline and see if everything is working, let’s try the test dataset.
 
 Remember the key points:
@@ -173,9 +198,9 @@ Now, I’ll be honest, there’s a pretty good chance that something will go wro
 
 If all goes well, you should start seeing some log output from Nextflow appearing on your console. Nextflow informs you which step of the pipeline it is doing and the percentage completed.
 
-Even though the datasets in a test run are small, this pipeline can take a while because it submits jobs to the UPPMAX server via the resource manager SLURM. Depending on how busy the server is at the moment (and it might be quite busy if you all run this at the same time!), it may take a while before your jobs are executed. It might therefore be necessary to cancel the pipeline once Nextflow seems to progress though the different steps slowly but steadily.  If you want to cancel the pipeline execution to progress with the tutorial, press CTRL-C. Or alternatively, put it in the background using tmux, do some other things and reattach later to check in on the progress.
+Even though the datasets in a test run are small, this pipeline can take a while because it submits jobs to the hpc or  UPPMAX server via the resource manager SLURM. Depending on how busy the server is at the moment (and it might be quite busy if you all run this at the same time!), it may take a while before your jobs are executed. It might therefore be necessary to cancel the pipeline once Nextflow seems to progress though the different steps slowly but steadily.  If you want to cancel the pipeline execution to progress with the tutorial, press CTRL-C. Or alternatively, put it in the background using tmux, do some other things and reattach later to check in on the progress.
 
-### 05.1.1 Generated files
+### 4.1.1 Generated files
 The pipeline will create a bunch of files in your directory as it goes:
 
 $ ls -a1
@@ -195,7 +220,7 @@ As the pipeline runs, it saves the final files it generates to results (customis
 rm -rf work/
 
 
-### 05.1.2. Re-running a pipeline with -resume
+### 4.1.2. Re-running a pipeline with '-resume'
 Nextflow is very clever about using cached copies of pipeline steps if you re-run a pipeline.
 
 Once the test workflow has finished or you have canceled it the middle of its execution, try running the same command again with the -resume flag. Hopefully almost all steps will use the previous cached copies of results and the pipeline will finish extremely quickly.
@@ -203,11 +228,11 @@ Once the test workflow has finished or you have canceled it the middle of its ex
 This option is very useful if a pipeline fails unexpectedly, as it allows you to start again and pick up where you left off.
 
 
-### 05.1.3. Read the docs
+### 4.1.3. Read the docs
 The documentation for nf-core pipelines is a big part of the community ethos.
 
-Whilst the test dataset is running (it’s small, but the UPPMAX job queue can be slow), check out the nf-core website. Every pipeline has its own page with extensive documentation. For example, the ampliseq docs are at https://nf-co.re/ampliseq
-
+Whilst the test dataset is running (it’s small, but the UPPMAX job queue can be slow), check out the nf-core website. Every pipeline has its own page with extensive documentation. For example, the ampliseq docs are at [https://nf-co.re/ampliseq](https://nf-co.re/ampliseq)
+or at [github](https://github.com/nf-core/ampliseq)
 nf-core pipelines also have some documentation on the command line. You can run this as you would a real pipeline run, but with the --help option.
 
 In a new fresh directory(!), try this out:
@@ -219,12 +244,13 @@ nextflow run $NF_CORE_PIPELINES/ampliseq/1.2.1/workflow --help
 ```
 
 
-##### 06. Running a real workflow ---------------------------
+<a name="sec5"></a>
+## 5. Running a nf-core/ampliseq workflow 
 
 Now we get to the real deal! Once you’ve gotten this far, you start to leave behind the generalisations that apply to all nf-core pipelines. Now you have to rely on your wits and the nf-core documentation. We have prepared small datasets for a Ampliseq analysis and a BS-seq analysis. You can choose to do the one that interests you most or if you have time you can try both!
 
-#### 06.1.  Ampliseq
-### Example data
+<a name="sec5.1"></a>
+### 5.1. Example data
 We have prepared some example data for you that comes from the exercises you’ve worked on earlier in the week. The files have been subsampled to make them small and quick to run, and are supplied as gzipped (compressed) FastQ files here: path/to/input/fasta/fastq_sub12_gz/
 
 Make a new directory for this CHiP seq analysis and link the data files to a data folder in this directory. We link to these files in this tutorial instead of copying them (which would also be an option) so as not to fill up the filesystem.
@@ -238,7 +264,8 @@ ln -s path/to/input/fasta/*.fastq.gz .
 ls
 The last command should show you the 4 neural fastq.gz files in this folder.
 
-### 06.1.1. Preparing the sample sheet
+<a name="sec5.1.1"></a>
+### 5.1.1. Preparing the sample sheet
 The nf-core/ampliseq pipeline uses a comma-separated sample sheet file to list all of the input files and which replicate / condition they belong to.
 
 Take a moment to read the documentation and make sure that you understand the fields and structure of the file.
@@ -250,7 +277,8 @@ cp path/to/input/samplesheet.csv .
 cat samplesheet.csv
 The cat command shows you the contents of the sample sheet.
 
-### 06.1.2. Things to look out for
+<a name="sec5.1.2"></a>
+### 5.1.2. Things to look out for
 The following things are easy mistakes when working with ampliseq sample sheets - be careful!
 
 File paths of the fast.gz files are relative to where you launch Nextflow (i.e. the ampliseq_analysis folder), not relative to the sample sheet
@@ -261,14 +289,14 @@ Use Linux line endings (\n), not windows (\r\n)
 
 If using single end data, keep the empty column for the second FastQ file
 
-### 06.1.3. Running the main nf-core/ampliseq pipeline
 Once you’ve got your sample sheet ready, you can launch the analysis! 
 
 #####################3  amplicon sequencing real run ############ 
 ##################################################################
 ###################################################################
 
-##### Final script --------------------------------
+<a name="sec6"></a>
+## 6. Final ampliseq script 
 
 ```
 cd /proj/snic2022-22-289/nobackup/abu/ampliseq_its/
