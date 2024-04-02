@@ -12,7 +12,7 @@ Abu Bakar Siddique1, Abu Bakar Siddique2,3,  Lovely Mahawar2,  Benedicte Riber A
 *Correspondence: benedicte.albrectsen@umu.se 
 
 ---------- Abu Bakar Siddique, Dr.rer.nat., SLUBI, SLU
-<font size=20>__COI ampliseq analysis with nf-core/ampliseq pipeline (step by step)__</font>
+<font size=20>__ITS ampliseq analysis with nf-core/ampliseq pipeline (step by step)__</font>
 
 1. [Prepare HPC (here its Uppmax) & environment](#sec1) </br>
     1.1. [Log in](#sec1.1)</br>
@@ -356,10 +356,4 @@ nextflow run nf-core/ampliseq --input /proj/snic2022-22-289/nobackup/abu/amplise
 
 ##### Take result folders and do downstream analysis in R 
 
-OneDrive - Umeå universitet
-
-cd /mnt/c/Users/user_id/OneDrive\ \-\ \Umeå\ \universitet/Onedrive_21_01_2020/SwAsp_metagenom/results
-
-scp -r abusiddi@rackham.uppmax.uu.se:/proj/snic2022-22-289/nobackup/abu/ampliseq_its/real_run/results .
-
-
+rest of the analysis was done with R in Rstudio *see the `r_analysis_script.qmd` script* 
