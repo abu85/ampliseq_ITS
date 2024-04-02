@@ -3,11 +3,11 @@
 ### step_by_step_bioinformatic_analysis_with_nf-core-ampliseq
 This analysis was with the following paper:
 
-Genotypes, Tannin Capacity, and Seasonality Influence the Structure and Function of Symptomless Fungal Communities in Aspen Leaves, Regardless of Historical Nitrogen Addition
-Abu Bakar Siddique2, Abu Bakar Siddique1,3,  Lovely Mahawar1,  Benedicte Riber Albrectsen1*
+Genotype, Tannin Capacity, and Seasonality Influence the Structure and Function of Symptomless Fungal Communities in Aspen Leaves, Regardless of Historical Nitrogen Addition
+Abu Bakar Siddique1, Abu Bakar Siddique2,3,  Lovely Mahawar2,  Benedicte Riber Albrectsen2*
 
-1. Umeå Plant Science Centre (UPSC), Department of Plant Physiology, Umeå University, 90187 Umeå, Sweden. 
-2. Department of Plant Biology, Swedish University of Agricultural Sciences, 75007, Uppsala, Sweden. 
+1. Department of Plant Biology, Swedish University of Agricultural Sciences, 75007, Uppsala, Sweden. 
+2. Umeå Plant Science Centre (UPSC), Department of Plant Physiology, Umeå University, 90187 Umeå, Sweden. 
 3. Tasmanian Institute of Agriculture (TIA), University of Tasmania, Prospect 7250, Tasmania, Australia.
 *Correspondence: benedicte.albrectsen@umu.se 
 
