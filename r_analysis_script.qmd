@@ -1,0 +1,5165 @@
+---
+title: "r_script_&_notebook"
+subtitle: " Publication: Genotypes, Tannin Capacity, and Seasonality Influence the Structure and Function of Symptomless Fungal Communities in Aspen Leaves, Regardless of Historical Nitrogen Addition"
+editor: visual
+author: "Abu B. Siddique, abu.siddique@slu.se"
+date: last-modified
+format:
+  html:
+    title-block-banner: true
+    smooth-scroll: true
+    toc: true
+    toc-depth: 4
+    toc-location: right
+    number-sections: true
+    number-depth: 4
+    code-fold: true
+    code-tools: true
+    code-copy: true
+    code-overflow: wrap
+    df-print: kable
+    standalone: false
+    fig-align: left
+    theme: pulse
+    highlight: kate
+---
+
+```{r}
+#| echo: false
+#| output: asis
+cat("# ","Loading R packages")
+```
+
+```{r include=FALSE}
+rm(list = ls()) # remove all contents from the global env
+```
+
+```{r include=FALSE}
+
+#| echo: false
+require(vegan) ## (http://cran.r-project.org/web/packages/vegan/index.html)
+
+require(rmarkdown)
+
+require(remedy)
+
+require(e1071)
+
+require(ggplot2)
+
+require(ggplotify)
+
+require(mvabund) ## (http://cran.r-project.org/web/packages/mvabund/index.html)
+
+require(picante) ## (http://cran.r-project.org/web/packages/picante/index.html)
+
+require(mgcv) ## (http://cran.r-project.org/web/packages/mgcv/index.html)
+
+require(PCNM) ## (http://cran.r-project.org/web/packages/pcnm/index.html)
+
+require(labdsv) ## (http://cran.r-project.org/web/packages/labdsv/index.html)
+
+require(cluster) ##(http://cran.r-project.org/web/packages/cluster/index.html)
+
+require(indicspecies) ##(http://cran.r-project.org/web/packages/indicspecies/index.html)
+
+require(DiversitySampler) ##(http://cran.r-project.org/web/packages/DiversitySampler/index.html)
+
+require(ape) ##(http://cran.r-project.org/web/packages/ape/index.html)
+
+require(packfor) ##(http://cran.r-project.org/web/packages/packfor/index.html)
+
+require(lattice)
+
+require(plotrix)
+
+require(dplyr)
+
+library(readr)
+
+library(tidyr)
+
+library(readxl)
+
+library(extrafont)
+
+library("ggsci")
+
+library(grid)
+library(gtable)
+
+library(cowplot)
+
+library(rstatix)
+
+library(reshape2)
+
+library(viridis)
+
+library(patchwork)
+
+library(scales)
+
+```
+
+To export figures create directory
+
+```{r include=FALSE}
+#| echo: false
+dir.create(path = "path/to/create/a_new_folder")
+```
+
+Making some colours
+
+```{r include=FALSE}
+brown.transp<-adjustcolor("saddlebrown", alpha.f=0.5)
+
+green.transp<-adjustcolor("green4", alpha.f=0.5)
+
+black.transp<-adjustcolor("black", alpha.f=0.5)
+
+red.transp<-adjustcolor("darkred", alpha.f=0.5)
+
+blue.transp<-adjustcolor("darkblue", alpha.f=0.5)
+
+orange.transp<-adjustcolor("orange", alpha.f=0.5)
+
+pink.transp<-adjustcolor("pink", alpha.f=0.5)
+
+green.transp_light<-adjustcolor("green4", alpha.f=0.2)
+
+green.transp_norm<-adjustcolor("green4", alpha.f=0.5)
+
+green.transp_dark<-adjustcolor("green4", alpha.f=1)
+
+violet.transp_dark <- adjustcolor("darkviolet", alpha.f = 0.7)
+
+colours <- c("#F0A3FF","#0075DC","#993F00","#4C005C","#2BCE48","#FFCC99","#808080","#94FFB5","#8F7C00","#9DCC00","#C20088","#003380","#FFA405","#FFA8BB","#426600","#FF0010","#5EF1F2","#00998F","#740AFF","#990000")
+
+```
+
+# Data import
+
+## Import ASV counts data table
+
+```{r include=FALSE}
+asv_count_raw <- read_delim("path/to/asv_or_feature_table/feature-table.tsv",delim = "\t", escape_double = FALSE,
+trim_ws = TRUE, skip = 1, col_names = T)
+
+asv_count <- asv_count_raw[,2:345]
+
+rownames(asv_count) <- asv_count_raw$`#OTU ID`
+
+asv_count <- as.data.frame(t(asv_count))
+```
+
+No. of samples & no. of ASVs:
+
+```{r}
+dim(asv_count)
+```
+
+Total sequencing read :
+
+```{r}
+sum(asv_count)
+```
+
+Sample wise total counts
+
+```{r}
+#| echo: false
+reads_sum <- as.data.frame(rowSums(asv_count))
+
+reads_sum[order(row.names(reads_sum)),]
+
+summary(reads_sum)
+```
+
+## Import metadata table
+
+```{r}
+#| echo: false
+metadata_raw <- read.delim2("path/to/metadata/metadata_new1_no_str_no_pcr_repli_sample_sheet_no363_2023_09_29.txt")
+```
+
+Processing metadata
+
+```{r}
+#| echo: false
+metadata1 <- as.data.frame(metadata_raw)
+
+metadata1 <- metadata1[order(metadata1$sampleID),]
+
+rownames(metadata1) <- metadata1$sampleID
+
+metadata1 <- subset(metadata1, rownames(metadata1) %in% rownames(asv_count)) # subset to make the data equal
+
+metadata <- metadata1[,4:36]
+
+rownames(metadata) <- metadata1$sampleID
+
+metadata <- as.data.frame(metadata)
+
+head(metadata)
+
+```
+
+Dimension of the metadata
+
+```{r}
+dim(metadata)
+```
+
+## Import taxonomy table
+
+**Taxonomic tables originated from DADA2 & QIIME2 were merged and manually curated**
+
+```{r}
+rel_ab_ASV_QIIME2_tax <- as.data.frame(read_excel("C:/Users/auue0001/Downloads/Combined_DADA2_Qiime2 (2).xlsx"))
+dim(rel_ab_ASV_QIIME2_tax)
+```
+
+dimension
+
+```{r}
+rel_ab_ASV_QIIME2_tax_test <- rel_ab_ASV_QIIME2_tax
+
+tax <- rel_ab_ASV_QIIME2_tax_test[,2:355] # all taxa
+dim(tax)
+```
+
+Kingdom
+
+```{r}
+kingdom_qiime2 <- rel_ab_ASV_QIIME2_tax_test[,c(3,12:355)] # take only kingdom
+
+kingdom_qiime2[is.na(kingdom_qiime2)] <- 'Unknown' # unknown
+
+kingdom <- aggregate(.~Kingdom,data=kingdom_qiime2, FUN=sum) #Sum of rows based on kingdom
+
+rownames(kingdom) <- kingdom$Kingdom # assign row names
+
+kingdom <- kingdom[,c(2:345)] # remove 'Order' column
+
+dim(kingdom)
+
+```
+
+Phylum
+
+```{r}
+Phylum_qiime2 <- rel_ab_ASV_QIIME2_tax_test[,c(4,12:355)] # take only Phylum
+
+Phylum_qiime2[is.na(Phylum_qiime2)] <- 'Unknown' # unknown
+
+Phylum <- aggregate(.~Phylum,data=Phylum_qiime2, FUN=sum) #Sum of rows based on Phylum
+
+rownames(Phylum) <- Phylum$Phylum # assign row names
+
+Phylum <- Phylum[,c(2:345)] # remove 'Order' column
+
+dim(Phylum)
+summary(t(Phylum))
+```
+
+Order
+
+```{r}
+orders_qiime2 <- rel_ab_ASV_QIIME2_tax_test[,c(6,12:355)] # take only orders
+
+orders_qiime2[is.na(orders_qiime2)] <- 'Unknown' # unknown
+
+orders <- aggregate(.~Order,data=orders_qiime2, FUN=sum) #Sum of rows based on orders
+
+rownames(orders) <- orders$Order # assign row names
+
+orders <- orders[,c(2:345)] # remove 'Order' column
+
+dim(orders)
+
+```
+
+Check if their sum is equal to 1
+
+```{r}
+head(colSums(orders)) # check if its sums 1
+```
+
+Genus
+
+```{r}
+genera_qiime2 <- rel_ab_ASV_QIIME2_tax_test[,c(8,12:355)] # take only genera
+
+genera_qiime2[is.na(genera_qiime2)] <- 'Unknown'
+
+genera <- aggregate(.~Genus,data=genera_qiime2, FUN=sum) #Sum of rows based on genera
+
+rownames(genera) <- genera$Genus # assign row names
+
+genera <- genera[,c(2:345)] # remove 'Order' column
+
+dim(genera)
+```
+
+Check if genera sum is equal to 1
+
+```{r}
+head(colSums(genera))
+```
+
+## Import functional guilds table
+
+Bioinformatic FunGuild analysis summary: 125 matched guilds and 456 unmatched (out of 481 ASVs)
+
+```{r}
+guild_data <- as.data.frame(read_delim(
+"path/to/FUNGuild_data/rel-table-ASV_with-QIIME2-tax.guilds.txt",
+delim = "\t", escape_double = FALSE, show_col_types = FALSE,
+trim_ws = TRUE))
+```
+
+processing guilds data
+
+```{r warning=FALSE}
+guild_data_tax <- guild_data %>%
+separate(taxonomy, c("k", "P", "c", "o", "f", "g", "s"), ";")
+
+# guilds
+
+guild_qiime2 <- guild_data_tax[,c(358,11:354)] # take only guilds
+
+guild_qiime2[is.na(guild_qiime2)] <- 'Unknown' # unknown
+
+guild_qiime2 <- aggregate(.~Guild,data=guild_qiime2, FUN=sum) #Sum of rows based on orders
+
+guild_qiime2$Guild[guild_qiime2$Guild == '-'] <- 'Unknown'
+
+rownames(guild_qiime2) <- guild_qiime2$Guild # assign row names
+
+guild_qiime2 <- guild_qiime2[,c(2:345)] # remove 'Order' column
+cat("Total guilds and samples are ")
+dim(guild_qiime2)
+```
+
+```{r include=FALSE}
+head (colSums(guild_qiime2)) # check if its sums 1
+```
+
+Trophic modes
+
+```{r}
+# t_mode
+
+t_mode_qiime2 <- guild_data_tax[,c(357,11:354)] # take only t_modes
+
+t_mode_qiime2[is.na(t_mode_qiime2)] <- 'Unknown' # unknown
+
+t_mode_qiime2 <- aggregate(.~`Trophic Mode`,data=t_mode_qiime2, FUN=sum) #Sum of rows based on orders
+
+t_mode_qiime2$`Trophic Mode`[t_mode_qiime2$`Trophic Mode` == '-'] <- 'Unknown'
+
+rownames(t_mode_qiime2) <- t_mode_qiime2$`Trophic Mode` # assign row names
+
+t_mode_qiime2 <- t_mode_qiime2[,c(2:345)] # remove 'Order' column
+
+dim(t_mode_qiime2)
+```
+
+```{r include=FALSE}
+head(colSums(t_mode_qiime2)) # check if its sums 1
+```
+
+############################## 
+
+# Sub-setting data
+
+## Subsetting metadata
+
+Total Samples in 2020
+
+```{r}
+#| echo: false
+metadata_2020 <- subset (metadata, metadata$year== "2020")
+dim(metadata_2020)
+```
+
+Total Samples in 2021
+
+```{r}
+#| echo: false
+metadata_2021 <- subset (metadata, metadata$year== "2021")
+dim(metadata_2021)
+```
+
+Total
+
+```{r}
+#| echo: false
+reads_sum <- subset(reads_sum, row.names(reads_sum) %in% row.names(metadata))
+
+
+reads_sum_metadata <- merge(reads_sum, metadata, by = "row.names") # https://docs.tibco.com/pub/enterprise-runtime-for-R/4.3.0/doc/html/Language_Reference/base/merge.html
+
+rownames(reads_sum_metadata) <- reads_sum_metadata[,1]
+
+reads_sum_metadata$Row.names <- as.character(reads_sum_metadata$Row.names) # make it character
+
+reads_sum_metadata <- as.data.frame(reads_sum_metadata)
+
+dim(reads_sum_metadata)
+```
+
+## Filter outliers
+
+***for whole data***
+
+```{r}
+reads_sum_metadata_no_whole_outlier <- reads_sum_metadata %>% 
+  filter(reads_sum_metadata$`rowSums(asv_count)`> 1084)
+print("Total samples after outlier (here less than 1085 total reads) rempval is ")
+dim(reads_sum_metadata_no_whole_outlier)
+```
+
+```{r}
+head(reads_sum_metadata_no_whole_outlier)
+```
+
+Outliers metadata
+
+```{r}
+outlier_samples <- anti_join(reads_sum_metadata, reads_sum_metadata_no_whole_outlier, by = c("Row.names" = "Row.names")) # what is in 'reads_sum_metadata' but not in 'reads_sum_metadata_no_whole_outlier'
+
+outlier_samples
+```
+
+Summary of the filtered data
+
+```{r}
+dim(reads_sum_metadata_no_whole_outlier)
+```
+
+so we filtered out 344-337 = 7 samples!!!
+
+What is the summary of the filtered reads sums
+
+```{r}
+summary(reads_sum_metadata_no_whole_outlier$`rowSums(asv_count)`)
+sum(reads_sum_metadata_no_whole_outlier$`rowSums(asv_count)`)
+```
+
+*upper line match to the line down?! if yes you are fine, no data is lost so far! :)* *Min. 1st Qu. Median Mean 3rd Qu. Max.*
+
+*21238 69708 83271 84694 99265 145238*
+
+-   total number of reads after filtering 7 outliers are 30080430
+
+no. of samples in each event(before filter and after filter)
+
+```{r include=TRUE}
+cat ("No. of samples per event in main data")
+metadata %>% group_by(date) %>% count
+
+cat ("No. of samples per event in filtered data")
+reads_sum_metadata_no_whole_outlier %>% group_by(date) %>% count
+
+```
+
+Outliars removal
+
+```{r}
+#| echo: false
+metadata<- subset(metadata, rownames(metadata)
+%in% rownames(reads_sum_metadata_no_whole_outlier)) # subset to make the data equal
+
+cat("total metadata table after filtering outliers " ) 
+
+dim(metadata)
+
+
+
+metadata_2020 <- subset (metadata, metadata$year== "2020")
+dim(metadata_2020)
+
+
+metadata_2021 <- subset (metadata, metadata$year== "2021")
+dim(metadata_2021)
+
+
+asv_count<- subset(asv_count, rownames(asv_count)
+%in% rownames(reads_sum_metadata_no_whole_outlier)) # subset to make the data equal
+
+cat("totat asv counts after filtering outliers " ) 
+dim(asv_count)
+
+asv_count_2020 <- subset (asv_count,metadata$year== "2020")
+dim(asv_count_2020)
+
+
+asv_count_2021 <- subset (asv_count,metadata$year== "2021")
+dim(asv_count_2021)
+
+
+orders <- as.data.frame(t(orders))
+
+orders <- subset(orders, rownames(orders)
+%in% (reads_sum_metadata_no_whole_outlier$Row.names)) # subset to make the data equal
+
+orders <- as.data.frame(t(orders))
+
+cat("total filtered orders " ) 
+dim(orders)
+
+genera <- as.data.frame(t(genera))
+
+genera <- subset(genera, rownames(genera)
+%in% (reads_sum_metadata_no_whole_outlier$Row.names)) # subset to make the data equal
+
+genera <- as.data.frame(t(genera))
+
+cat("total filtered genera " ) 
+dim(genera)
+
+
+t_mode <- as.data.frame(t(t_mode_qiime2))
+
+t_mode <- subset(t_mode, rownames(t_mode) %in% 
+  (reads_sum_metadata_no_whole_outlier$Row.names)) # subset to make the data equal
+
+t_mode <- as.data.frame(t(t_mode))
+
+cat("total filtered trophic modes: " ) 
+dim(t_mode)
+
+```
+
+### Basic results after outliers removal
+
+```{r}
+
+cat ("Total samples in the filtered samples: ")
+     
+dim(asv_count) 
+
+cat ("Total reads in the filtered samples")
+sum(asv_count)
+```
+
+## Sub-seting ASV count data
+
+subset count data according to genotypes, dates and treatments
+
+**genotype**
+
+```{r}
+#genotype
+asv_count_g5 <- subset(asv_count, metadata$genotype=="5")
+asv_count_g5 <- asv_count_g5[!colSums(asv_count_g5)==0]
+dim(asv_count_g5)
+
+asv_count_g50 <- subset(asv_count, metadata$genotype=="50")
+asv_count_g50 <- asv_count_g50[!colSums(asv_count_g50)==0]
+dim(asv_count_g50)
+
+asv_count_g60 <- subset(asv_count, metadata$genotype=="60")
+asv_count_g60 <- asv_count_g60[!colSums(asv_count_g60)==0]
+dim(asv_count_g60)
+
+asv_count_g65 <- subset(asv_count, metadata$genotype=="65")
+asv_count_g65 <- asv_count_g65[!colSums(asv_count_g65)==0]
+dim(asv_count_g65)
+
+asv_count_g72 <- subset(asv_count, metadata$genotype=="72")
+asv_count_g72 <- asv_count_g72[!colSums(asv_count_g72)==0]
+dim(asv_count_g72)
+
+asv_count_g115 <- subset(asv_count, metadata$genotype=="115")
+asv_count_g115 <- asv_count_g115[!colSums(asv_count_g115)==0]
+dim(asv_count_g115)
+```
+
+**date or event**
+
+```{r}
+#| echo: false
+meta_date_22_06_2020 <- subset(metadata, metadata$date=="22-06-2020")
+
+asv_count_22_06_2020 <- subset(asv_count, metadata$date=="22-06-2020")
+
+asv_count_22_06_2020 <- asv_count_22_06_2020[!colSums(asv_count_22_06_2020)==0]
+
+dim(asv_count_22_06_2020)
+
+meta_date_14_07_2020 <- subset(metadata, metadata$date=="14-07-2020")
+
+asv_count_14_07_2020 <- subset(asv_count, metadata$date=="14-07-2020")
+
+asv_count_14_07_2020 <- asv_count_14_07_2020[!colSums(asv_count_14_07_2020)==0]
+
+dim(asv_count_14_07_2020)
+
+meta_date_06_08_2020 <- subset(metadata, metadata$date=="06-08-2020")
+
+asv_count_06_08_2020 <- subset(asv_count, metadata$date=="06-08-2020")
+
+asv_count_06_08_2020 <- asv_count_06_08_2020[!colSums(asv_count_06_08_2020)==0]
+
+dim(asv_count_06_08_2020)
+
+meta_date_23_08_2020 <- subset(metadata, metadata$date=="23-08-2020")
+
+asv_count_23_08_2020 <- subset(asv_count, metadata$date=="23-08-2020")
+
+asv_count_23_08_2020 <- asv_count_23_08_2020[!colSums(asv_count_23_08_2020)==0]
+
+dim(asv_count_23_08_2020)
+
+meta_date_23_06_2021 <- subset(metadata, metadata$date=="23-06-2021")
+
+asv_count_23_06_2021 <- subset(asv_count, metadata$date=="23-06-2021")
+
+asv_count_23_06_2021 <- asv_count_23_06_2021[!colSums(asv_count_23_06_2021)==0]
+
+dim(asv_count_23_06_2021)
+
+meta_date_14_07_2021 <- subset(metadata, metadata$date=="14-07-2021")
+
+asv_count_14_07_2021 <- subset(asv_count, metadata$date=="14-07-2021")
+
+asv_count_14_07_2021 <- asv_count_14_07_2021[!colSums(asv_count_14_07_2021)==0]
+
+dim(asv_count_14_07_2021)
+
+meta_date_24_08_2021 <- subset(metadata, metadata$date=="24-08-2021")
+
+asv_count_24_08_2021 <- subset(asv_count, metadata$date=="24-08-2021")
+
+asv_count_24_08_2021 <- asv_count_24_08_2021[!colSums(asv_count_24_08_2021)==0]
+
+dim(asv_count_24_08_2021)
+```
+
+genotypes per event and treatments per event
+
+```{r}
+##### 22_06_2020
+
+#g5
+
+meta_date_22_06_2020_g5 <- subset(meta_date_22_06_2020, meta_date_22_06_2020$Genotype=="GT5")
+
+asv_count_22_06_2020_g5 <- subset(asv_count_22_06_2020, meta_date_22_06_2020$Genotype=="GT5")
+
+asv_count_22_06_2020_g5 <- asv_count_22_06_2020_g5[!colSums(asv_count_22_06_2020_g5)==0]
+
+dim(asv_count_22_06_2020_g5)
+
+#g50
+
+meta_date_22_06_2020_g50 <- subset(meta_date_22_06_2020, meta_date_22_06_2020$Genotype=="GT50")
+
+asv_count_22_06_2020_g50 <- subset(asv_count_22_06_2020, meta_date_22_06_2020$Genotype=="GT50")
+
+asv_count_22_06_2020_g50 <- asv_count_22_06_2020_g50[!colSums(asv_count_22_06_2020_g50)==0]
+
+dim(asv_count_22_06_2020_g50)
+
+#g60
+
+meta_date_22_06_2020_g60 <- subset(meta_date_22_06_2020, meta_date_22_06_2020$Genotype=="GT60")
+
+asv_count_22_06_2020_g60 <- subset(asv_count_22_06_2020, meta_date_22_06_2020$Genotype=="GT60")
+
+asv_count_22_06_2020_g60 <- asv_count_22_06_2020_g60[!colSums(asv_count_22_06_2020_g60)==0]
+
+dim(asv_count_22_06_2020_g60)
+
+#g65
+
+meta_date_22_06_2020_g65 <- subset(meta_date_22_06_2020, meta_date_22_06_2020$Genotype=="GT65")
+
+asv_count_22_06_2020_g65 <- subset(asv_count_22_06_2020, meta_date_22_06_2020$Genotype=="GT65")
+
+asv_count_22_06_2020_g65 <- asv_count_22_06_2020_g65[!colSums(asv_count_22_06_2020_g65)==0]
+
+dim(asv_count_22_06_2020_g65)
+
+#g72
+
+meta_date_22_06_2020_g72 <- subset(meta_date_22_06_2020, meta_date_22_06_2020$Genotype=="GT72")
+
+asv_count_22_06_2020_g72 <- subset(asv_count_22_06_2020, meta_date_22_06_2020$Genotype=="GT72")
+
+asv_count_22_06_2020_g72 <- asv_count_22_06_2020_g72[!colSums(asv_count_22_06_2020_g72)==0]
+
+dim(asv_count_22_06_2020_g72)
+
+#g115
+
+meta_date_22_06_2020_g115 <- subset(meta_date_22_06_2020, meta_date_22_06_2020$Genotype=="GT115")
+
+asv_count_22_06_2020_g115 <- subset(asv_count_22_06_2020, meta_date_22_06_2020$Genotype=="GT115")
+
+asv_count_22_06_2020_g115 <- asv_count_22_06_2020_g115[!colSums(asv_count_22_06_2020_g115)==0]
+
+dim(asv_count_22_06_2020_g115)
+
+#### each event wise treatment
+
+#t0
+
+meta_date_22_06_2020_t0 <- subset(meta_date_22_06_2020, meta_date_22_06_2020$treatment=="0")
+
+asv_count_22_06_2020_t0 <- subset(asv_count_22_06_2020, meta_date_22_06_2020$treatment=="0")
+
+asv_count_22_06_2020_t0 <- asv_count_22_06_2020_t0[!colSums(asv_count_22_06_2020_t0)==0]
+
+dim(asv_count_22_06_2020_t0)
+
+#t15
+
+meta_date_22_06_2020_t15 <- subset(meta_date_22_06_2020, meta_date_22_06_2020$treatment=="15")
+
+asv_count_22_06_2020_t15 <- subset(asv_count_22_06_2020, meta_date_22_06_2020$treatment=="15")
+
+asv_count_22_06_2020_t15 <- asv_count_22_06_2020_t15[!colSums(asv_count_22_06_2020_t15)==0]
+
+dim(asv_count_22_06_2020_t15)
+
+#t115
+
+meta_date_22_06_2020_t115 <- subset(meta_date_22_06_2020, meta_date_22_06_2020$treatment=="150")
+
+asv_count_22_06_2020_t115 <- subset(asv_count_22_06_2020, meta_date_22_06_2020$treatment=="150")
+
+asv_count_22_06_2020_t115 <- asv_count_22_06_2020_t115[!colSums(asv_count_22_06_2020_t115)==0]
+
+dim(asv_count_22_06_2020_t115)
+
+##### 14_07_2020 ----
+
+#g5
+
+meta_date_14_07_2020_g5 <- subset(meta_date_14_07_2020, meta_date_14_07_2020$Genotype=="GT5")
+
+asv_count_14_07_2020_g5 <- subset(asv_count_14_07_2020, meta_date_14_07_2020$Genotype=="GT5")
+
+asv_count_14_07_2020_g5 <- asv_count_14_07_2020_g5[!colSums(asv_count_14_07_2020_g5)==0]
+
+dim(asv_count_14_07_2020_g5)
+
+#g50
+
+meta_date_14_07_2020_g50 <- subset(meta_date_14_07_2020, meta_date_14_07_2020$Genotype=="GT50")
+
+asv_count_14_07_2020_g50 <- subset(asv_count_14_07_2020, meta_date_14_07_2020$Genotype=="GT50")
+
+asv_count_14_07_2020_g50 <- asv_count_14_07_2020_g50[!colSums(asv_count_14_07_2020_g50)==0]
+
+dim(asv_count_14_07_2020_g50)
+
+#g60
+
+meta_date_14_07_2020_g60 <- subset(meta_date_14_07_2020, meta_date_14_07_2020$Genotype=="GT60")
+
+asv_count_14_07_2020_g60 <- subset(asv_count_14_07_2020, meta_date_14_07_2020$Genotype=="GT60")
+
+asv_count_14_07_2020_g60 <- asv_count_14_07_2020_g60[!colSums(asv_count_14_07_2020_g60)==0]
+
+dim(asv_count_14_07_2020_g60)
+
+#g65
+
+meta_date_14_07_2020_g65 <- subset(meta_date_14_07_2020, meta_date_14_07_2020$Genotype=="GT65")
+
+asv_count_14_07_2020_g65 <- subset(asv_count_14_07_2020, meta_date_14_07_2020$Genotype=="GT65")
+
+asv_count_14_07_2020_g65 <- asv_count_14_07_2020_g65[!colSums(asv_count_14_07_2020_g65)==0]
+
+dim(asv_count_14_07_2020_g65)
+
+#g72
+
+meta_date_14_07_2020_g72 <- subset(meta_date_14_07_2020, meta_date_14_07_2020$Genotype=="GT72")
+
+asv_count_14_07_2020_g72 <- subset(asv_count_14_07_2020, meta_date_14_07_2020$Genotype=="GT72")
+
+asv_count_14_07_2020_g72 <- asv_count_14_07_2020_g72[!colSums(asv_count_14_07_2020_g72)==0]
+
+dim(asv_count_14_07_2020_g72)
+
+#g115
+
+meta_date_14_07_2020_g115 <- subset(meta_date_14_07_2020, meta_date_14_07_2020$Genotype=="GT115")
+
+asv_count_14_07_2020_g115 <- subset(asv_count_14_07_2020, meta_date_14_07_2020$Genotype=="GT115")
+
+asv_count_14_07_2020_g115 <- asv_count_14_07_2020_g115[!colSums(asv_count_14_07_2020_g115)==0]
+
+dim(asv_count_14_07_2020_g115)
+
+#### each event wise treatment
+
+#t0
+
+meta_date_14_07_2020_t0 <- subset(meta_date_14_07_2020, meta_date_14_07_2020$treatment=="0")
+
+asv_count_14_07_2020_t0 <- subset(asv_count_14_07_2020, meta_date_14_07_2020$treatment=="0")
+
+asv_count_14_07_2020_t0 <- asv_count_14_07_2020_t0[!colSums(asv_count_14_07_2020_t0)==0]
+
+dim(asv_count_14_07_2020_t0)
+
+#t15
+
+meta_date_14_07_2020_t15 <- subset(meta_date_14_07_2020, meta_date_14_07_2020$treatment=="15")
+
+asv_count_14_07_2020_t15 <- subset(asv_count_14_07_2020, meta_date_14_07_2020$treatment=="15")
+
+asv_count_14_07_2020_t15 <- asv_count_14_07_2020_t15[!colSums(asv_count_14_07_2020_t15)==0]
+
+dim(asv_count_14_07_2020_t15)
+
+#t115
+
+meta_date_14_07_2020_t115 <- subset(meta_date_14_07_2020, meta_date_14_07_2020$treatment=="150")
+
+asv_count_14_07_2020_t115 <- subset(asv_count_14_07_2020, meta_date_14_07_2020$treatment=="150")
+
+asv_count_14_07_2020_t115 <- asv_count_14_07_2020_t115[!colSums(asv_count_14_07_2020_t115)==0]
+
+dim(asv_count_14_07_2020_t115)
+
+##### 06_08_2020 ----
+
+#g5
+
+meta_date_06_08_2020_g5 <- subset(meta_date_06_08_2020, meta_date_06_08_2020$Genotype=="GT5")
+
+asv_count_06_08_2020_g5 <- subset(asv_count_06_08_2020, meta_date_06_08_2020$Genotype=="GT5")
+
+asv_count_06_08_2020_g5 <- asv_count_06_08_2020_g5[!colSums(asv_count_06_08_2020_g5)==0]
+
+dim(asv_count_06_08_2020_g5)
+
+#g50
+
+meta_date_06_08_2020_g50 <- subset(meta_date_06_08_2020, meta_date_06_08_2020$Genotype=="GT50")
+
+asv_count_06_08_2020_g50 <- subset(asv_count_06_08_2020, meta_date_06_08_2020$Genotype=="GT50")
+
+asv_count_06_08_2020_g50 <- asv_count_06_08_2020_g50[!colSums(asv_count_06_08_2020_g50)==0]
+
+dim(asv_count_06_08_2020_g50)
+
+#g60
+
+meta_date_06_08_2020_g60 <- subset(meta_date_06_08_2020, meta_date_06_08_2020$Genotype=="GT60")
+
+asv_count_06_08_2020_g60 <- subset(asv_count_06_08_2020, meta_date_06_08_2020$Genotype=="GT60")
+
+asv_count_06_08_2020_g60 <- asv_count_06_08_2020_g60[!colSums(asv_count_06_08_2020_g60)==0]
+
+dim(asv_count_06_08_2020_g60)
+
+#g65
+
+meta_date_06_08_2020_g65 <- subset(meta_date_06_08_2020, meta_date_06_08_2020$Genotype=="GT65")
+
+asv_count_06_08_2020_g65 <- subset(asv_count_06_08_2020, meta_date_06_08_2020$Genotype=="GT65")
+
+asv_count_06_08_2020_g65 <- asv_count_06_08_2020_g65[!colSums(asv_count_06_08_2020_g65)==0]
+
+dim(asv_count_06_08_2020_g65)
+
+#g72
+
+meta_date_06_08_2020_g72 <- subset(meta_date_06_08_2020, meta_date_06_08_2020$Genotype=="GT72")
+
+asv_count_06_08_2020_g72 <- subset(asv_count_06_08_2020, meta_date_06_08_2020$Genotype=="GT72")
+
+asv_count_06_08_2020_g72 <- asv_count_06_08_2020_g72[!colSums(asv_count_06_08_2020_g72)==0]
+
+dim(asv_count_06_08_2020_g72)
+
+#g115
+
+meta_date_06_08_2020_g115 <- subset(meta_date_06_08_2020, meta_date_06_08_2020$Genotype=="GT115")
+
+asv_count_06_08_2020_g115 <- subset(asv_count_06_08_2020, meta_date_06_08_2020$Genotype=="GT115")
+
+asv_count_06_08_2020_g115 <- asv_count_06_08_2020_g115[!colSums(asv_count_06_08_2020_g115)==0]
+
+dim(asv_count_06_08_2020_g115)
+
+
+#### each event wise treatment
+
+#t0
+
+meta_date_06_08_2020_t0 <- subset(meta_date_06_08_2020, meta_date_06_08_2020$treatment=="0")
+
+asv_count_06_08_2020_t0 <- subset(asv_count_06_08_2020, meta_date_06_08_2020$treatment=="0")
+
+asv_count_06_08_2020_t0 <- asv_count_06_08_2020_t0[!colSums(asv_count_06_08_2020_t0)==0]
+
+dim(asv_count_06_08_2020_t0)
+
+#t15
+
+meta_date_06_08_2020_t15 <- subset(meta_date_06_08_2020, meta_date_06_08_2020$treatment=="15")
+
+asv_count_06_08_2020_t15 <- subset(asv_count_06_08_2020, meta_date_06_08_2020$treatment=="15")
+
+asv_count_06_08_2020_t15 <- asv_count_06_08_2020_t15[!colSums(asv_count_06_08_2020_t15)==0]
+
+dim(asv_count_06_08_2020_t15)
+
+#t115
+
+meta_date_06_08_2020_t115 <- subset(meta_date_06_08_2020, meta_date_06_08_2020$treatment=="150")
+
+asv_count_06_08_2020_t115 <- subset(asv_count_06_08_2020, meta_date_06_08_2020$treatment=="150")
+
+asv_count_06_08_2020_t115 <- asv_count_06_08_2020_t115[!colSums(asv_count_06_08_2020_t115)==0]
+
+dim(asv_count_06_08_2020_t115)
+
+##### 23_08_2020 ----
+
+#g5
+
+meta_date_23_08_2020_g5 <- subset(meta_date_23_08_2020, meta_date_23_08_2020$Genotype=="GT5")
+
+asv_count_23_08_2020_g5 <- subset(asv_count_23_08_2020, meta_date_23_08_2020$Genotype=="GT5")
+
+asv_count_23_08_2020_g5 <- asv_count_23_08_2020_g5[!colSums(asv_count_23_08_2020_g5)==0]
+
+dim(asv_count_23_08_2020_g5)
+
+#g50
+
+meta_date_23_08_2020_g50 <- subset(meta_date_23_08_2020, meta_date_23_08_2020$Genotype=="GT50")
+
+asv_count_23_08_2020_g50 <- subset(asv_count_23_08_2020, meta_date_23_08_2020$Genotype=="GT50")
+
+asv_count_23_08_2020_g50 <- asv_count_23_08_2020_g50[!colSums(asv_count_23_08_2020_g50)==0]
+
+dim(asv_count_23_08_2020_g50)
+
+#g60
+
+meta_date_23_08_2020_g60 <- subset(meta_date_23_08_2020, meta_date_23_08_2020$Genotype=="GT60")
+
+asv_count_23_08_2020_g60 <- subset(asv_count_23_08_2020, meta_date_23_08_2020$Genotype=="GT60")
+
+asv_count_23_08_2020_g60 <- asv_count_23_08_2020_g60[!colSums(asv_count_23_08_2020_g60)==0]
+
+dim(asv_count_23_08_2020_g60)
+
+#g65
+
+meta_date_23_08_2020_g65 <- subset(meta_date_23_08_2020, meta_date_23_08_2020$Genotype=="GT65")
+
+asv_count_23_08_2020_g65 <- subset(asv_count_23_08_2020, meta_date_23_08_2020$Genotype=="GT65")
+
+asv_count_23_08_2020_g65 <- asv_count_23_08_2020_g65[!colSums(asv_count_23_08_2020_g65)==0]
+
+dim(asv_count_23_08_2020_g65)
+
+#g72
+
+meta_date_23_08_2020_g72 <- subset(meta_date_23_08_2020, meta_date_23_08_2020$Genotype=="GT72")
+
+asv_count_23_08_2020_g72 <- subset(asv_count_23_08_2020, meta_date_23_08_2020$Genotype=="GT72")
+
+asv_count_23_08_2020_g72 <- asv_count_23_08_2020_g72[!colSums(asv_count_23_08_2020_g72)==0]
+
+dim(asv_count_23_08_2020_g72)
+
+#g115
+
+meta_date_23_08_2020_g115 <- subset(meta_date_23_08_2020, meta_date_23_08_2020$Genotype=="GT115")
+
+asv_count_23_08_2020_g115 <- subset(asv_count_23_08_2020, meta_date_23_08_2020$Genotype=="GT115")
+
+asv_count_23_08_2020_g115 <- asv_count_23_08_2020_g115[!colSums(asv_count_23_08_2020_g115)==0]
+
+dim(asv_count_23_08_2020_g115)
+
+#### each event wise treatment
+
+#t0
+
+meta_date_23_08_2020_t0 <- subset(meta_date_23_08_2020, meta_date_23_08_2020$treatment=="0")
+
+asv_count_23_08_2020_t0 <- subset(asv_count_23_08_2020, meta_date_23_08_2020$treatment=="0")
+
+asv_count_23_08_2020_t0 <- asv_count_23_08_2020_t0[!colSums(asv_count_23_08_2020_t0)==0]
+
+dim(asv_count_23_08_2020_t0)
+
+#t15
+
+meta_date_23_08_2020_t15 <- subset(meta_date_23_08_2020, meta_date_23_08_2020$treatment=="15")
+
+asv_count_23_08_2020_t15 <- subset(asv_count_23_08_2020, meta_date_23_08_2020$treatment=="15")
+
+asv_count_23_08_2020_t15 <- asv_count_23_08_2020_t15[!colSums(asv_count_23_08_2020_t15)==0]
+
+dim(asv_count_23_08_2020_t15)
+
+#t115
+
+meta_date_23_08_2020_t115 <- subset(meta_date_23_08_2020, meta_date_23_08_2020$treatment=="150")
+
+asv_count_23_08_2020_t115 <- subset(asv_count_23_08_2020, meta_date_23_08_2020$treatment=="150")
+
+asv_count_23_08_2020_t115 <- asv_count_23_08_2020_t115[!colSums(asv_count_23_08_2020_t115)==0]
+
+dim(asv_count_23_08_2020_t115)
+
+##### 23_06_2021 ----
+
+#g5
+
+meta_date_23_06_2021_g5 <- subset(meta_date_23_06_2021, meta_date_23_06_2021$Genotype=="GT5")
+
+asv_count_23_06_2021_g5 <- subset(asv_count_23_06_2021, meta_date_23_06_2021$Genotype=="GT5")
+
+asv_count_23_06_2021_g5 <- asv_count_23_06_2021_g5[!colSums(asv_count_23_06_2021_g5)==0]
+
+dim(asv_count_23_06_2021_g5)
+
+#g50
+
+meta_date_23_06_2021_g50 <- subset(meta_date_23_06_2021, meta_date_23_06_2021$Genotype=="GT50")
+
+asv_count_23_06_2021_g50 <- subset(asv_count_23_06_2021, meta_date_23_06_2021$Genotype=="GT50")
+
+asv_count_23_06_2021_g50 <- asv_count_23_06_2021_g50[!colSums(asv_count_23_06_2021_g50)==0]
+
+dim(asv_count_23_06_2021_g50)
+
+#g60
+
+meta_date_23_06_2021_g60 <- subset(meta_date_23_06_2021, meta_date_23_06_2021$Genotype=="GT60")
+
+asv_count_23_06_2021_g60 <- subset(asv_count_23_06_2021, meta_date_23_06_2021$Genotype=="GT60")
+
+asv_count_23_06_2021_g60 <- asv_count_23_06_2021_g60[!colSums(asv_count_23_06_2021_g60)==0]
+
+dim(asv_count_23_06_2021_g60)
+
+#g65
+
+meta_date_23_06_2021_g65 <- subset(meta_date_23_06_2021, meta_date_23_06_2021$Genotype=="GT65")
+
+asv_count_23_06_2021_g65 <- subset(asv_count_23_06_2021, meta_date_23_06_2021$Genotype=="GT65")
+
+asv_count_23_06_2021_g65 <- asv_count_23_06_2021_g65[!colSums(asv_count_23_06_2021_g65)==0]
+
+dim(asv_count_23_06_2021_g65)
+
+#g72
+
+meta_date_23_06_2021_g72 <- subset(meta_date_23_06_2021, meta_date_23_06_2021$Genotype=="GT72")
+
+asv_count_23_06_2021_g72 <- subset(asv_count_23_06_2021, meta_date_23_06_2021$Genotype=="GT72")
+
+asv_count_23_06_2021_g72 <- asv_count_23_06_2021_g72[!colSums(asv_count_23_06_2021_g72)==0]
+
+dim(asv_count_23_06_2021_g72)
+
+#g115
+
+meta_date_23_06_2021_g115 <- subset(meta_date_23_06_2021, meta_date_23_06_2021$Genotype=="GT115")
+
+asv_count_23_06_2021_g115 <- subset(asv_count_23_06_2021, meta_date_23_06_2021$Genotype=="GT115")
+
+asv_count_23_06_2021_g115 <- asv_count_23_06_2021_g115[!colSums(asv_count_23_06_2021_g115)==0]
+
+dim(asv_count_23_06_2021_g115)
+
+#### each event wise treatment
+
+#t0
+
+meta_date_23_06_2021_t0 <- subset(meta_date_23_06_2021, meta_date_23_06_2021$treatment=="0")
+
+asv_count_23_06_2021_t0 <- subset(asv_count_23_06_2021, meta_date_23_06_2021$treatment=="0")
+
+asv_count_23_06_2021_t0 <- asv_count_23_06_2021_t0[!colSums(asv_count_23_06_2021_t0)==0]
+
+dim(asv_count_23_06_2021_t0)
+
+#t15
+
+meta_date_23_06_2021_t15 <- subset(meta_date_23_06_2021, meta_date_23_06_2021$treatment=="15")
+
+asv_count_23_06_2021_t15 <- subset(asv_count_23_06_2021, meta_date_23_06_2021$treatment=="15")
+
+asv_count_23_06_2021_t15 <- asv_count_23_06_2021_t15[!colSums(asv_count_23_06_2021_t15)==0]
+
+dim(asv_count_23_06_2021_t15)
+
+#t115
+
+meta_date_23_06_2021_t115 <- subset(meta_date_23_06_2021, meta_date_23_06_2021$treatment=="150")
+
+asv_count_23_06_2021_t115 <- subset(asv_count_23_06_2021, meta_date_23_06_2021$treatment=="150")
+
+asv_count_23_06_2021_t115 <- asv_count_23_06_2021_t115[!colSums(asv_count_23_06_2021_t115)==0]
+
+dim(asv_count_23_06_2021_t115)
+
+##### 14_07_2021 ----
+
+#g5
+
+meta_date_14_07_2021_g5 <- subset(meta_date_14_07_2021, meta_date_14_07_2021$Genotype=="GT5")
+
+asv_count_14_07_2021_g5 <- subset(asv_count_14_07_2021, meta_date_14_07_2021$Genotype=="GT5")
+
+asv_count_14_07_2021_g5 <- asv_count_14_07_2021_g5[!colSums(asv_count_14_07_2021_g5)==0]
+
+dim(asv_count_14_07_2021_g5)
+
+#g50
+
+meta_date_14_07_2021_g50 <- subset(meta_date_14_07_2021, meta_date_14_07_2021$Genotype=="GT50")
+
+asv_count_14_07_2021_g50 <- subset(asv_count_14_07_2021, meta_date_14_07_2021$Genotype=="GT50")
+
+asv_count_14_07_2021_g50 <- asv_count_14_07_2021_g50[!colSums(asv_count_14_07_2021_g50)==0]
+
+dim(asv_count_14_07_2021_g50)
+
+#g60
+
+meta_date_14_07_2021_g60 <- subset(meta_date_14_07_2021, meta_date_14_07_2021$Genotype=="GT60")
+
+asv_count_14_07_2021_g60 <- subset(asv_count_14_07_2021, meta_date_14_07_2021$Genotype=="GT60")
+
+asv_count_14_07_2021_g60 <- asv_count_14_07_2021_g60[!colSums(asv_count_14_07_2021_g60)==0]
+
+dim(asv_count_14_07_2021_g60)
+
+#g65
+
+meta_date_14_07_2021_g65 <- subset(meta_date_14_07_2021, meta_date_14_07_2021$Genotype=="GT65")
+
+asv_count_14_07_2021_g65 <- subset(asv_count_14_07_2021, meta_date_14_07_2021$Genotype=="GT65")
+
+asv_count_14_07_2021_g65 <- asv_count_14_07_2021_g65[!colSums(asv_count_14_07_2021_g65)==0]
+
+dim(asv_count_14_07_2021_g65)
+
+#g72
+
+meta_date_14_07_2021_g72 <- subset(meta_date_14_07_2021, meta_date_14_07_2021$Genotype=="GT72")
+
+asv_count_14_07_2021_g72 <- subset(asv_count_14_07_2021, meta_date_14_07_2021$Genotype=="GT72")
+
+asv_count_14_07_2021_g72 <- asv_count_14_07_2021_g72[!colSums(asv_count_14_07_2021_g72)==0]
+
+dim(asv_count_14_07_2021_g72)
+
+#g115
+
+meta_date_14_07_2021_g115 <- subset(meta_date_14_07_2021, meta_date_14_07_2021$Genotype=="GT115")
+
+asv_count_14_07_2021_g115 <- subset(asv_count_14_07_2021, meta_date_14_07_2021$Genotype=="GT115")
+
+asv_count_14_07_2021_g115 <- asv_count_14_07_2021_g115[!colSums(asv_count_14_07_2021_g115)==0]
+
+dim(asv_count_14_07_2021_g115)
+
+#### each event wise treatment
+
+#t0
+
+meta_date_14_07_2021_t0 <- subset(meta_date_14_07_2021, meta_date_14_07_2021$treatment=="0")
+
+asv_count_14_07_2021_t0 <- subset(asv_count_14_07_2021, meta_date_14_07_2021$treatment=="0")
+
+asv_count_14_07_2021_t0 <- asv_count_14_07_2021_t0[!colSums(asv_count_14_07_2021_t0)==0]
+
+dim(asv_count_14_07_2021_t0)
+
+#t15
+
+meta_date_14_07_2021_t15 <- subset(meta_date_14_07_2021, meta_date_14_07_2021$treatment=="15")
+
+asv_count_14_07_2021_t15 <- subset(asv_count_14_07_2021, meta_date_14_07_2021$treatment=="15")
+
+asv_count_14_07_2021_t15 <- asv_count_14_07_2021_t15[!colSums(asv_count_14_07_2021_t15)==0]
+
+dim(asv_count_14_07_2021_t15)
+
+#t115
+
+meta_date_14_07_2021_t115 <- subset(meta_date_14_07_2021, meta_date_14_07_2021$treatment=="150")
+
+asv_count_14_07_2021_t115 <- subset(asv_count_14_07_2021, meta_date_14_07_2021$treatment=="150")
+
+asv_count_14_07_2021_t115 <- asv_count_14_07_2021_t115[!colSums(asv_count_14_07_2021_t115)==0]
+
+dim(asv_count_14_07_2021_t115)
+
+##### 24_08_2021 ----
+
+#g5
+
+meta_date_24_08_2021_g5 <- subset(meta_date_24_08_2021, meta_date_24_08_2021$Genotype=="GT5")
+
+asv_count_24_08_2021_g5 <- subset(asv_count_24_08_2021, meta_date_24_08_2021$Genotype=="GT5")
+
+asv_count_24_08_2021_g5 <- asv_count_24_08_2021_g5[!colSums(asv_count_24_08_2021_g5)==0]
+
+dim(asv_count_24_08_2021_g5)
+
+#g50
+
+meta_date_24_08_2021_g50 <- subset(meta_date_24_08_2021, meta_date_24_08_2021$Genotype=="GT50")
+
+asv_count_24_08_2021_g50 <- subset(asv_count_24_08_2021, meta_date_24_08_2021$Genotype=="GT50")
+
+asv_count_24_08_2021_g50 <- asv_count_24_08_2021_g50[!colSums(asv_count_24_08_2021_g50)==0]
+
+dim(asv_count_24_08_2021_g50)
+
+#g60
+
+meta_date_24_08_2021_g60 <- subset(meta_date_24_08_2021, meta_date_24_08_2021$Genotype=="GT60")
+
+asv_count_24_08_2021_g60 <- subset(asv_count_24_08_2021, meta_date_24_08_2021$Genotype=="GT60")
+
+asv_count_24_08_2021_g60 <- asv_count_24_08_2021_g60[!colSums(asv_count_24_08_2021_g60)==0]
+
+dim(asv_count_24_08_2021_g60)
+
+#g65
+
+meta_date_24_08_2021_g65 <- subset(meta_date_24_08_2021, meta_date_24_08_2021$Genotype=="GT65")
+
+asv_count_24_08_2021_g65 <- subset(asv_count_24_08_2021, meta_date_24_08_2021$Genotype=="GT65")
+
+asv_count_24_08_2021_g65 <- asv_count_24_08_2021_g65[!colSums(asv_count_24_08_2021_g65)==0]
+
+dim(asv_count_24_08_2021_g65)
+
+#g72
+
+meta_date_24_08_2021_g72 <- subset(meta_date_24_08_2021, meta_date_24_08_2021$Genotype=="GT72")
+
+asv_count_24_08_2021_g72 <- subset(asv_count_24_08_2021, meta_date_24_08_2021$Genotype=="GT72")
+
+asv_count_24_08_2021_g72 <- asv_count_24_08_2021_g72[!colSums(asv_count_24_08_2021_g72)==0]
+
+dim(asv_count_24_08_2021_g72)
+
+#g115
+
+meta_date_24_08_2021_g115 <- subset(meta_date_24_08_2021, meta_date_24_08_2021$Genotype=="GT115")
+
+asv_count_24_08_2021_g115 <- subset(asv_count_24_08_2021, meta_date_24_08_2021$Genotype=="GT115")
+
+asv_count_24_08_2021_g115 <- asv_count_24_08_2021_g115[!colSums(asv_count_24_08_2021_g115)==0]
+
+dim(asv_count_24_08_2021_g115)
+
+#### each event wise treatment
+
+#t0
+
+meta_date_24_08_2021_t0 <- subset(meta_date_24_08_2021, meta_date_24_08_2021$treatment=="0")
+
+asv_count_24_08_2021_t0 <- subset(asv_count_24_08_2021, meta_date_24_08_2021$treatment=="0")
+
+asv_count_24_08_2021_t0 <- asv_count_24_08_2021_t0[!colSums(asv_count_24_08_2021_t0)==0]
+
+dim(asv_count_24_08_2021_t0)
+
+#t15
+
+meta_date_24_08_2021_t15 <- subset(meta_date_24_08_2021, meta_date_24_08_2021$treatment=="15")
+
+asv_count_24_08_2021_t15 <- subset(asv_count_24_08_2021, meta_date_24_08_2021$treatment=="15")
+
+asv_count_24_08_2021_t15 <- asv_count_24_08_2021_t15[!colSums(asv_count_24_08_2021_t15)==0]
+
+dim(asv_count_24_08_2021_t15)
+
+#t115
+
+meta_date_24_08_2021_t115 <- subset(meta_date_24_08_2021, meta_date_24_08_2021$treatment=="150")
+
+asv_count_24_08_2021_t115 <- subset(asv_count_24_08_2021, meta_date_24_08_2021$treatment=="150")
+
+asv_count_24_08_2021_t115 <- asv_count_24_08_2021_t115[!colSums(asv_count_24_08_2021_t115)==0]
+
+dim(asv_count_24_08_2021_t115)
+
+#### event wise genotype wise treatment -----
+
+##### 22_06_2020 ----
+
+#g5_t0
+
+meta_date_22_06_2020_g5_t0 <- subset(meta_date_22_06_2020_g5, meta_date_22_06_2020_g5$treatment=="0")
+
+asv_count_22_06_2020_g5_t0 <- subset(asv_count_22_06_2020_g5, meta_date_22_06_2020_g5$treatment=="0")
+
+asv_count_22_06_2020_g5_t0 <- asv_count_22_06_2020_g5_t0[!colSums(asv_count_22_06_2020_g5_t0)==0]
+
+dim(asv_count_22_06_2020_g5_t0)
+
+#g5_t15
+
+meta_date_22_06_2020_g5_t15 <- subset(meta_date_22_06_2020_g5, meta_date_22_06_2020_g5$treatment=="15")
+
+asv_count_22_06_2020_g5_t15 <- subset(asv_count_22_06_2020_g5, meta_date_22_06_2020_g5$treatment=="15")
+
+asv_count_22_06_2020_g5_t15 <- asv_count_22_06_2020_g5_t15[!colSums(asv_count_22_06_2020_g5_t15)==0]
+
+dim(asv_count_22_06_2020_g5_t15)
+
+#g5_t115
+
+meta_date_22_06_2020_g5_t115 <- subset(meta_date_22_06_2020_g5, meta_date_22_06_2020_g5$treatment=="150")
+
+asv_count_22_06_2020_g5_t115 <- subset(asv_count_22_06_2020_g5, meta_date_22_06_2020_g5$treatment=="150")
+
+asv_count_22_06_2020_g5_t115 <- asv_count_22_06_2020_g5_t115[!colSums(asv_count_22_06_2020_g5_t115)==0]
+
+dim(asv_count_22_06_2020_g5_t115)
+
+#g50_t0
+
+meta_date_22_06_2020_g50_t0 <- subset(meta_date_22_06_2020_g50, meta_date_22_06_2020_g50$treatment=="0")
+
+asv_count_22_06_2020_g50_t0 <- subset(asv_count_22_06_2020_g50, meta_date_22_06_2020_g50$treatment=="0")
+
+asv_count_22_06_2020_g50_t0 <- asv_count_22_06_2020_g50_t0[!colSums(asv_count_22_06_2020_g50_t0)==0]
+
+dim(asv_count_22_06_2020_g50_t0)
+
+#g50_t15
+
+meta_date_22_06_2020_g50_t15 <- subset(meta_date_22_06_2020_g50, meta_date_22_06_2020_g50$treatment=="15")
+
+asv_count_22_06_2020_g50_t15 <- subset(asv_count_22_06_2020_g50, meta_date_22_06_2020_g50$treatment=="15")
+
+asv_count_22_06_2020_g50_t15 <- asv_count_22_06_2020_g50_t15[!colSums(asv_count_22_06_2020_g50_t15)==0]
+
+dim(asv_count_22_06_2020_g50_t15)
+
+#g50_t115
+
+meta_date_22_06_2020_g50_t115 <- subset(meta_date_22_06_2020_g50, meta_date_22_06_2020_g50$treatment=="150")
+
+asv_count_22_06_2020_g50_t115 <- subset(asv_count_22_06_2020_g50, meta_date_22_06_2020_g50$treatment=="150")
+
+asv_count_22_06_2020_g50_t115 <- asv_count_22_06_2020_g50_t115[!colSums(asv_count_22_06_2020_g50_t115)==0]
+
+dim(asv_count_22_06_2020_g50_t115)
+
+#g60_t0
+
+meta_date_22_06_2020_g60_t0 <- subset(meta_date_22_06_2020_g60, meta_date_22_06_2020_g60$treatment=="0")
+
+asv_count_22_06_2020_g60_t0 <- subset(asv_count_22_06_2020_g60, meta_date_22_06_2020_g60$treatment=="0")
+
+asv_count_22_06_2020_g60_t0 <- asv_count_22_06_2020_g60_t0[!colSums(asv_count_22_06_2020_g60_t0)==0]
+
+dim(asv_count_22_06_2020_g60_t0)
+
+#g60_t15
+
+meta_date_22_06_2020_g60_t15 <- subset(meta_date_22_06_2020_g60, meta_date_22_06_2020_g60$treatment=="15")
+
+asv_count_22_06_2020_g60_t15 <- subset(asv_count_22_06_2020_g60, meta_date_22_06_2020_g60$treatment=="15")
+
+asv_count_22_06_2020_g60_t15 <- asv_count_22_06_2020_g60_t15[!colSums(asv_count_22_06_2020_g60_t15)==0]
+
+dim(asv_count_22_06_2020_g60_t15)
+
+#g60_t115
+
+meta_date_22_06_2020_g60_t115 <- subset(meta_date_22_06_2020_g60, meta_date_22_06_2020_g60$treatment=="150")
+
+asv_count_22_06_2020_g60_t115 <- subset(asv_count_22_06_2020_g60, meta_date_22_06_2020_g60$treatment=="150")
+
+asv_count_22_06_2020_g60_t115 <- asv_count_22_06_2020_g60_t115[!colSums(asv_count_22_06_2020_g60_t115)==0]
+
+dim(asv_count_22_06_2020_g60_t115)
+
+#g65_t0
+
+meta_date_22_06_2020_g65_t0 <- subset(meta_date_22_06_2020_g65, meta_date_22_06_2020_g65$treatment=="0")
+
+asv_count_22_06_2020_g65_t0 <- subset(asv_count_22_06_2020_g65, meta_date_22_06_2020_g65$treatment=="0")
+
+asv_count_22_06_2020_g65_t0 <- asv_count_22_06_2020_g65_t0[!colSums(asv_count_22_06_2020_g65_t0)==0]
+
+dim(asv_count_22_06_2020_g65_t0)
+
+#g65_t15
+
+meta_date_22_06_2020_g65_t15 <- subset(meta_date_22_06_2020_g65, meta_date_22_06_2020_g65$treatment=="15")
+
+asv_count_22_06_2020_g65_t15 <- subset(asv_count_22_06_2020_g65, meta_date_22_06_2020_g65$treatment=="15")
+
+asv_count_22_06_2020_g65_t15 <- asv_count_22_06_2020_g65_t15[!colSums(asv_count_22_06_2020_g65_t15)==0]
+
+dim(asv_count_22_06_2020_g65_t15)
+
+#g65_t115
+
+meta_date_22_06_2020_g65_t115 <- subset(meta_date_22_06_2020_g65, meta_date_22_06_2020_g65$treatment=="150")
+
+asv_count_22_06_2020_g65_t115 <- subset(asv_count_22_06_2020_g65, meta_date_22_06_2020_g65$treatment=="150")
+
+asv_count_22_06_2020_g65_t115 <- asv_count_22_06_2020_g65_t115[!colSums(asv_count_22_06_2020_g65_t115)==0]
+
+dim(asv_count_22_06_2020_g65_t115)
+
+#g72_t0
+
+meta_date_22_06_2020_g72_t0 <- subset(meta_date_22_06_2020_g72, meta_date_22_06_2020_g72$treatment=="0")
+
+asv_count_22_06_2020_g72_t0 <- subset(asv_count_22_06_2020_g72, meta_date_22_06_2020_g72$treatment=="0")
+
+asv_count_22_06_2020_g72_t0 <- asv_count_22_06_2020_g72_t0[!colSums(asv_count_22_06_2020_g72_t0)==0]
+
+dim(asv_count_22_06_2020_g72_t0)
+
+#g72_t15
+
+meta_date_22_06_2020_g72_t15 <- subset(meta_date_22_06_2020_g72, meta_date_22_06_2020_g72$treatment=="15")
+
+asv_count_22_06_2020_g72_t15 <- subset(asv_count_22_06_2020_g72, meta_date_22_06_2020_g72$treatment=="15")
+
+asv_count_22_06_2020_g72_t15 <- asv_count_22_06_2020_g72_t15[!colSums(asv_count_22_06_2020_g72_t15)==0]
+
+dim(asv_count_22_06_2020_g72_t15)
+
+#g72_t115
+
+meta_date_22_06_2020_g72_t115 <- subset(meta_date_22_06_2020_g72, meta_date_22_06_2020_g72$treatment=="150")
+
+asv_count_22_06_2020_g72_t115 <- subset(asv_count_22_06_2020_g72, meta_date_22_06_2020_g72$treatment=="150")
+
+asv_count_22_06_2020_g72_t115 <- asv_count_22_06_2020_g72_t115[!colSums(asv_count_22_06_2020_g72_t115)==0]
+
+dim(asv_count_22_06_2020_g72_t115)
+
+#g115_t0
+
+meta_date_22_06_2020_g115_t0 <- subset(meta_date_22_06_2020_g115, meta_date_22_06_2020_g115$treatment=="0")
+
+asv_count_22_06_2020_g115_t0 <- subset(asv_count_22_06_2020_g115, meta_date_22_06_2020_g115$treatment=="0")
+
+asv_count_22_06_2020_g115_t0 <- asv_count_22_06_2020_g115_t0[!colSums(asv_count_22_06_2020_g115_t0)==0]
+
+dim(asv_count_22_06_2020_g115_t0)
+
+#g115_t15
+
+meta_date_22_06_2020_g115_t15 <- subset(meta_date_22_06_2020_g115, meta_date_22_06_2020_g115$treatment=="15")
+
+asv_count_22_06_2020_g115_t15 <- subset(asv_count_22_06_2020_g115, meta_date_22_06_2020_g115$treatment=="15")
+
+asv_count_22_06_2020_g115_t15 <- asv_count_22_06_2020_g115_t15[!colSums(asv_count_22_06_2020_g115_t15)==0]
+
+dim(asv_count_22_06_2020_g115_t15)
+
+#g115_t115
+
+meta_date_22_06_2020_g115_t115 <- subset(meta_date_22_06_2020_g115, meta_date_22_06_2020_g115$treatment=="150")
+
+asv_count_22_06_2020_g115_t115 <- subset(asv_count_22_06_2020_g115, meta_date_22_06_2020_g115$treatment=="150")
+
+asv_count_22_06_2020_g115_t115 <- asv_count_22_06_2020_g115_t115[!colSums(asv_count_22_06_2020_g115_t115)==0]
+
+dim(asv_count_22_06_2020_g115_t115)
+
+##### 14_07_2020 ----
+
+#g5_t0
+
+meta_date_14_07_2020_g5_t0 <- subset(meta_date_14_07_2020_g5, meta_date_14_07_2020_g5$treatment=="0")
+
+asv_count_14_07_2020_g5_t0 <- subset(asv_count_14_07_2020_g5, meta_date_14_07_2020_g5$treatment=="0")
+
+asv_count_14_07_2020_g5_t0 <- asv_count_14_07_2020_g5_t0[!colSums(asv_count_14_07_2020_g5_t0)==0]
+
+dim(asv_count_14_07_2020_g5_t0)
+
+#g5_t15
+
+meta_date_14_07_2020_g5_t15 <- subset(meta_date_14_07_2020_g5, meta_date_14_07_2020_g5$treatment=="15")
+
+asv_count_14_07_2020_g5_t15 <- subset(asv_count_14_07_2020_g5, meta_date_14_07_2020_g5$treatment=="15")
+
+asv_count_14_07_2020_g5_t15 <- asv_count_14_07_2020_g5_t15[!colSums(asv_count_14_07_2020_g5_t15)==0]
+
+dim(asv_count_14_07_2020_g5_t15)
+
+#g5_t115
+
+meta_date_14_07_2020_g5_t115 <- subset(meta_date_14_07_2020_g5, meta_date_14_07_2020_g5$treatment=="150")
+
+asv_count_14_07_2020_g5_t115 <- subset(asv_count_14_07_2020_g5, meta_date_14_07_2020_g5$treatment=="150")
+
+asv_count_14_07_2020_g5_t115 <- asv_count_14_07_2020_g5_t115[!colSums(asv_count_14_07_2020_g5_t115)==0]
+
+dim(asv_count_14_07_2020_g5_t115)
+
+#g50_t0
+
+meta_date_14_07_2020_g50_t0 <- subset(meta_date_14_07_2020_g50, meta_date_14_07_2020_g50$treatment=="0")
+
+asv_count_14_07_2020_g50_t0 <- subset(asv_count_14_07_2020_g50, meta_date_14_07_2020_g50$treatment=="0")
+
+asv_count_14_07_2020_g50_t0 <- asv_count_14_07_2020_g50_t0[!colSums(asv_count_14_07_2020_g50_t0)==0]
+
+dim(asv_count_14_07_2020_g50_t0)
+
+#g50_t15
+
+meta_date_14_07_2020_g50_t15 <- subset(meta_date_14_07_2020_g50, meta_date_14_07_2020_g50$treatment=="15")
+
+asv_count_14_07_2020_g50_t15 <- subset(asv_count_14_07_2020_g50, meta_date_14_07_2020_g50$treatment=="15")
+
+asv_count_14_07_2020_g50_t15 <- asv_count_14_07_2020_g50_t15[!colSums(asv_count_14_07_2020_g50_t15)==0]
+
+dim(asv_count_14_07_2020_g50_t15)
+
+#g50_t115
+
+meta_date_14_07_2020_g50_t115 <- subset(meta_date_14_07_2020_g50, meta_date_14_07_2020_g50$treatment=="150")
+
+asv_count_14_07_2020_g50_t115 <- subset(asv_count_14_07_2020_g50, meta_date_14_07_2020_g50$treatment=="150")
+
+asv_count_14_07_2020_g50_t115 <- asv_count_14_07_2020_g50_t115[!colSums(asv_count_14_07_2020_g50_t115)==0]
+
+dim(asv_count_14_07_2020_g50_t115)
+
+#g60_t0
+
+meta_date_14_07_2020_g60_t0 <- subset(meta_date_14_07_2020_g60, meta_date_14_07_2020_g60$treatment=="0")
+
+asv_count_14_07_2020_g60_t0 <- subset(asv_count_14_07_2020_g60, meta_date_14_07_2020_g60$treatment=="0")
+
+asv_count_14_07_2020_g60_t0 <- asv_count_14_07_2020_g60_t0[!colSums(asv_count_14_07_2020_g60_t0)==0]
+
+dim(asv_count_14_07_2020_g60_t0)
+
+#g60_t15
+
+meta_date_14_07_2020_g60_t15 <- subset(meta_date_14_07_2020_g60, meta_date_14_07_2020_g60$treatment=="15")
+
+asv_count_14_07_2020_g60_t15 <- subset(asv_count_14_07_2020_g60, meta_date_14_07_2020_g60$treatment=="15")
+
+asv_count_14_07_2020_g60_t15 <- asv_count_14_07_2020_g60_t15[!colSums(asv_count_14_07_2020_g60_t15)==0]
+
+dim(asv_count_14_07_2020_g60_t15)
+
+#g60_t115
+
+meta_date_14_07_2020_g60_t115 <- subset(meta_date_14_07_2020_g60, meta_date_14_07_2020_g60$treatment=="150")
+
+asv_count_14_07_2020_g60_t115 <- subset(asv_count_14_07_2020_g60, meta_date_14_07_2020_g60$treatment=="150")
+
+asv_count_14_07_2020_g60_t115 <- asv_count_14_07_2020_g60_t115[!colSums(asv_count_14_07_2020_g60_t115)==0]
+
+dim(asv_count_14_07_2020_g60_t115)
+
+#g65_t0
+
+meta_date_14_07_2020_g65_t0 <- subset(meta_date_14_07_2020_g65, meta_date_14_07_2020_g65$treatment=="0")
+
+asv_count_14_07_2020_g65_t0 <- subset(asv_count_14_07_2020_g65, meta_date_14_07_2020_g65$treatment=="0")
+
+asv_count_14_07_2020_g65_t0 <- asv_count_14_07_2020_g65_t0[!colSums(asv_count_14_07_2020_g65_t0)==0]
+
+dim(asv_count_14_07_2020_g65_t0)
+
+#g65_t15
+
+meta_date_14_07_2020_g65_t15 <- subset(meta_date_14_07_2020_g65, meta_date_14_07_2020_g65$treatment=="15")
+
+asv_count_14_07_2020_g65_t15 <- subset(asv_count_14_07_2020_g65, meta_date_14_07_2020_g65$treatment=="15")
+
+asv_count_14_07_2020_g65_t15 <- asv_count_14_07_2020_g65_t15[!colSums(asv_count_14_07_2020_g65_t15)==0]
+
+dim(asv_count_14_07_2020_g65_t15)
+
+#g65_t115
+
+meta_date_14_07_2020_g65_t115 <- subset(meta_date_14_07_2020_g65, meta_date_14_07_2020_g65$treatment=="150")
+
+asv_count_14_07_2020_g65_t115 <- subset(asv_count_14_07_2020_g65, meta_date_14_07_2020_g65$treatment=="150")
+
+asv_count_14_07_2020_g65_t115 <- asv_count_14_07_2020_g65_t115[!colSums(asv_count_14_07_2020_g65_t115)==0]
+
+dim(asv_count_14_07_2020_g65_t115)
+
+#g72_t0
+
+meta_date_14_07_2020_g72_t0 <- subset(meta_date_14_07_2020_g72, meta_date_14_07_2020_g72$treatment=="0")
+
+asv_count_14_07_2020_g72_t0 <- subset(asv_count_14_07_2020_g72, meta_date_14_07_2020_g72$treatment=="0")
+
+asv_count_14_07_2020_g72_t0 <- asv_count_14_07_2020_g72_t0[!colSums(asv_count_14_07_2020_g72_t0)==0]
+
+dim(asv_count_14_07_2020_g72_t0)
+
+#g72_t15
+
+meta_date_14_07_2020_g72_t15 <- subset(meta_date_14_07_2020_g72, meta_date_14_07_2020_g72$treatment=="15")
+
+asv_count_14_07_2020_g72_t15 <- subset(asv_count_14_07_2020_g72, meta_date_14_07_2020_g72$treatment=="15")
+
+asv_count_14_07_2020_g72_t15 <- asv_count_14_07_2020_g72_t15[!colSums(asv_count_14_07_2020_g72_t15)==0]
+
+dim(asv_count_14_07_2020_g72_t15)
+
+#g72_t115
+
+meta_date_14_07_2020_g72_t115 <- subset(meta_date_14_07_2020_g72, meta_date_14_07_2020_g72$treatment=="150")
+
+asv_count_14_07_2020_g72_t115 <- subset(asv_count_14_07_2020_g72, meta_date_14_07_2020_g72$treatment=="150")
+
+asv_count_14_07_2020_g72_t115 <- asv_count_14_07_2020_g72_t115[!colSums(asv_count_14_07_2020_g72_t115)==0]
+
+dim(asv_count_14_07_2020_g72_t115)
+
+#g115_t0
+
+meta_date_14_07_2020_g115_t0 <- subset(meta_date_14_07_2020_g115, meta_date_14_07_2020_g115$treatment=="0")
+
+asv_count_14_07_2020_g115_t0 <- subset(asv_count_14_07_2020_g115, meta_date_14_07_2020_g115$treatment=="0")
+
+asv_count_14_07_2020_g115_t0 <- asv_count_14_07_2020_g115_t0[!colSums(asv_count_14_07_2020_g115_t0)==0]
+
+dim(asv_count_14_07_2020_g115_t0)
+
+#g115_t15
+
+meta_date_14_07_2020_g115_t15 <- subset(meta_date_14_07_2020_g115, meta_date_14_07_2020_g115$treatment=="15")
+
+asv_count_14_07_2020_g115_t15 <- subset(asv_count_14_07_2020_g115, meta_date_14_07_2020_g115$treatment=="15")
+
+asv_count_14_07_2020_g115_t15 <- asv_count_14_07_2020_g115_t15[!colSums(asv_count_14_07_2020_g115_t15)==0]
+
+dim(asv_count_14_07_2020_g115_t15)
+
+#g115_t115
+
+meta_date_14_07_2020_g115_t115 <- subset(meta_date_14_07_2020_g115, meta_date_14_07_2020_g115$treatment=="150")
+
+asv_count_14_07_2020_g115_t115 <- subset(asv_count_14_07_2020_g115, meta_date_14_07_2020_g115$treatment=="150")
+
+asv_count_14_07_2020_g115_t115 <- asv_count_14_07_2020_g115_t115[!colSums(asv_count_14_07_2020_g115_t115)==0]
+
+dim(asv_count_14_07_2020_g115_t115)
+
+##### 06_08_2020 ----
+
+#g5_t0
+
+meta_date_06_08_2020_g5_t0 <- subset(meta_date_06_08_2020_g5, meta_date_06_08_2020_g5$treatment=="0")
+
+asv_count_06_08_2020_g5_t0 <- subset(asv_count_06_08_2020_g5, meta_date_06_08_2020_g5$treatment=="0")
+
+asv_count_06_08_2020_g5_t0 <- asv_count_06_08_2020_g5_t0[!colSums(asv_count_06_08_2020_g5_t0)==0]
+
+dim(asv_count_06_08_2020_g5_t0)
+
+#g5_t15
+
+meta_date_06_08_2020_g5_t15 <- subset(meta_date_06_08_2020_g5, meta_date_06_08_2020_g5$treatment=="15")
+
+asv_count_06_08_2020_g5_t15 <- subset(asv_count_06_08_2020_g5, meta_date_06_08_2020_g5$treatment=="15")
+
+asv_count_06_08_2020_g5_t15 <- asv_count_06_08_2020_g5_t15[!colSums(asv_count_06_08_2020_g5_t15)==0]
+
+dim(asv_count_06_08_2020_g5_t15)
+
+#g5_t115
+
+meta_date_06_08_2020_g5_t115 <- subset(meta_date_06_08_2020_g5, meta_date_06_08_2020_g5$treatment=="150")
+
+asv_count_06_08_2020_g5_t115 <- subset(asv_count_06_08_2020_g5, meta_date_06_08_2020_g5$treatment=="150")
+
+asv_count_06_08_2020_g5_t115 <- asv_count_06_08_2020_g5_t115[!colSums(asv_count_06_08_2020_g5_t115)==0]
+
+dim(asv_count_06_08_2020_g5_t115)
+
+#g50_t0
+
+meta_date_06_08_2020_g50_t0 <- subset(meta_date_06_08_2020_g50, meta_date_06_08_2020_g50$treatment=="0")
+
+asv_count_06_08_2020_g50_t0 <- subset(asv_count_06_08_2020_g50, meta_date_06_08_2020_g50$treatment=="0")
+
+asv_count_06_08_2020_g50_t0 <- asv_count_06_08_2020_g50_t0[!colSums(asv_count_06_08_2020_g50_t0)==0]
+
+dim(asv_count_06_08_2020_g50_t0)
+
+#g50_t15
+
+meta_date_06_08_2020_g50_t15 <- subset(meta_date_06_08_2020_g50, meta_date_06_08_2020_g50$treatment=="15")
+
+asv_count_06_08_2020_g50_t15 <- subset(asv_count_06_08_2020_g50, meta_date_06_08_2020_g50$treatment=="15")
+
+asv_count_06_08_2020_g50_t15 <- asv_count_06_08_2020_g50_t15[!colSums(asv_count_06_08_2020_g50_t15)==0]
+
+dim(asv_count_06_08_2020_g50_t15)
+
+#g50_t115
+
+meta_date_06_08_2020_g50_t115 <- subset(meta_date_06_08_2020_g50, meta_date_06_08_2020_g50$treatment=="150")
+
+asv_count_06_08_2020_g50_t115 <- subset(asv_count_06_08_2020_g50, meta_date_06_08_2020_g50$treatment=="150")
+
+asv_count_06_08_2020_g50_t115 <- asv_count_06_08_2020_g50_t115[!colSums(asv_count_06_08_2020_g50_t115)==0]
+
+dim(asv_count_06_08_2020_g50_t115)
+
+#g60_t0
+
+meta_date_06_08_2020_g60_t0 <- subset(meta_date_06_08_2020_g60, meta_date_06_08_2020_g60$treatment=="0")
+
+asv_count_06_08_2020_g60_t0 <- subset(asv_count_06_08_2020_g60, meta_date_06_08_2020_g60$treatment=="0")
+
+asv_count_06_08_2020_g60_t0 <- asv_count_06_08_2020_g60_t0[!colSums(asv_count_06_08_2020_g60_t0)==0]
+
+dim(asv_count_06_08_2020_g60_t0)
+
+#g60_t15
+
+meta_date_06_08_2020_g60_t15 <- subset(meta_date_06_08_2020_g60, meta_date_06_08_2020_g60$treatment=="15")
+
+asv_count_06_08_2020_g60_t15 <- subset(asv_count_06_08_2020_g60, meta_date_06_08_2020_g60$treatment=="15")
+
+asv_count_06_08_2020_g60_t15 <- asv_count_06_08_2020_g60_t15[!colSums(asv_count_06_08_2020_g60_t15)==0]
+
+dim(asv_count_06_08_2020_g60_t15)
+
+#g60_t115
+
+meta_date_06_08_2020_g60_t115 <- subset(meta_date_06_08_2020_g60, meta_date_06_08_2020_g60$treatment=="150")
+
+asv_count_06_08_2020_g60_t115 <- subset(asv_count_06_08_2020_g60, meta_date_06_08_2020_g60$treatment=="150")
+
+asv_count_06_08_2020_g60_t115 <- asv_count_06_08_2020_g60_t115[!colSums(asv_count_06_08_2020_g60_t115)==0]
+
+dim(asv_count_06_08_2020_g60_t115)
+
+#g65_t0
+
+meta_date_06_08_2020_g65_t0 <- subset(meta_date_06_08_2020_g65, meta_date_06_08_2020_g65$treatment=="0")
+
+asv_count_06_08_2020_g65_t0 <- subset(asv_count_06_08_2020_g65, meta_date_06_08_2020_g65$treatment=="0")
+
+asv_count_06_08_2020_g65_t0 <- asv_count_06_08_2020_g65_t0[!colSums(asv_count_06_08_2020_g65_t0)==0]
+
+dim(asv_count_06_08_2020_g65_t0)
+
+#g65_t15
+
+meta_date_06_08_2020_g65_t15 <- subset(meta_date_06_08_2020_g65, meta_date_06_08_2020_g65$treatment=="15")
+
+asv_count_06_08_2020_g65_t15 <- subset(asv_count_06_08_2020_g65, meta_date_06_08_2020_g65$treatment=="15")
+
+asv_count_06_08_2020_g65_t15 <- asv_count_06_08_2020_g65_t15[!colSums(asv_count_06_08_2020_g65_t15)==0]
+
+dim(asv_count_06_08_2020_g65_t15)
+
+#g65_t115
+
+meta_date_06_08_2020_g65_t115 <- subset(meta_date_06_08_2020_g65, meta_date_06_08_2020_g65$treatment=="150")
+
+asv_count_06_08_2020_g65_t115 <- subset(asv_count_06_08_2020_g65, meta_date_06_08_2020_g65$treatment=="150")
+
+asv_count_06_08_2020_g65_t115 <- asv_count_06_08_2020_g65_t115[!colSums(asv_count_06_08_2020_g65_t115)==0]
+
+dim(asv_count_06_08_2020_g65_t115)
+
+#g72_t0
+
+meta_date_06_08_2020_g72_t0 <- subset(meta_date_06_08_2020_g72, meta_date_06_08_2020_g72$treatment=="0")
+
+asv_count_06_08_2020_g72_t0 <- subset(asv_count_06_08_2020_g72, meta_date_06_08_2020_g72$treatment=="0")
+
+asv_count_06_08_2020_g72_t0 <- asv_count_06_08_2020_g72_t0[!colSums(asv_count_06_08_2020_g72_t0)==0]
+
+dim(asv_count_06_08_2020_g72_t0)
+
+#g72_t15
+
+meta_date_06_08_2020_g72_t15 <- subset(meta_date_06_08_2020_g72, meta_date_06_08_2020_g72$treatment=="15")
+
+asv_count_06_08_2020_g72_t15 <- subset(asv_count_06_08_2020_g72, meta_date_06_08_2020_g72$treatment=="15")
+
+asv_count_06_08_2020_g72_t15 <- asv_count_06_08_2020_g72_t15[!colSums(asv_count_06_08_2020_g72_t15)==0]
+
+dim(asv_count_06_08_2020_g72_t15)
+
+#g72_t115
+
+meta_date_06_08_2020_g72_t115 <- subset(meta_date_06_08_2020_g72, meta_date_06_08_2020_g72$treatment=="150")
+
+asv_count_06_08_2020_g72_t115 <- subset(asv_count_06_08_2020_g72, meta_date_06_08_2020_g72$treatment=="150")
+
+asv_count_06_08_2020_g72_t115 <- asv_count_06_08_2020_g72_t115[!colSums(asv_count_06_08_2020_g72_t115)==0]
+
+dim(asv_count_06_08_2020_g72_t115)
+
+#g115_t0
+
+meta_date_06_08_2020_g115_t0 <- subset(meta_date_06_08_2020_g115, meta_date_06_08_2020_g115$treatment=="0")
+
+asv_count_06_08_2020_g115_t0 <- subset(asv_count_06_08_2020_g115, meta_date_06_08_2020_g115$treatment=="0")
+
+asv_count_06_08_2020_g115_t0 <- asv_count_06_08_2020_g115_t0[!colSums(asv_count_06_08_2020_g115_t0)==0]
+
+dim(asv_count_06_08_2020_g115_t0)
+
+#g115_t15
+
+meta_date_06_08_2020_g115_t15 <- subset(meta_date_06_08_2020_g115, meta_date_06_08_2020_g115$treatment=="15")
+
+asv_count_06_08_2020_g115_t15 <- subset(asv_count_06_08_2020_g115, meta_date_06_08_2020_g115$treatment=="15")
+
+asv_count_06_08_2020_g115_t15 <- asv_count_06_08_2020_g115_t15[!colSums(asv_count_06_08_2020_g115_t15)==0]
+
+dim(asv_count_06_08_2020_g115_t15)
+
+#g115_t115
+
+meta_date_06_08_2020_g115_t115 <- subset(meta_date_06_08_2020_g115, meta_date_06_08_2020_g115$treatment=="150")
+
+asv_count_06_08_2020_g115_t115 <- subset(asv_count_06_08_2020_g115, meta_date_06_08_2020_g115$treatment=="150")
+
+asv_count_06_08_2020_g115_t115 <- asv_count_06_08_2020_g115_t115[!colSums(asv_count_06_08_2020_g115_t115)==0]
+
+dim(asv_count_06_08_2020_g115_t115)
+
+##### 23_08_2020 ----
+
+#g5_t0
+
+meta_date_23_08_2020_g5_t0 <- subset(meta_date_23_08_2020_g5, meta_date_23_08_2020_g5$treatment=="0")
+
+asv_count_23_08_2020_g5_t0 <- subset(asv_count_23_08_2020_g5, meta_date_23_08_2020_g5$treatment=="0")
+
+asv_count_23_08_2020_g5_t0 <- asv_count_23_08_2020_g5_t0[!colSums(asv_count_23_08_2020_g5_t0)==0]
+
+dim(asv_count_23_08_2020_g5_t0)
+
+#g5_t15
+
+meta_date_23_08_2020_g5_t15 <- subset(meta_date_23_08_2020_g5, meta_date_23_08_2020_g5$treatment=="15")
+
+asv_count_23_08_2020_g5_t15 <- subset(asv_count_23_08_2020_g5, meta_date_23_08_2020_g5$treatment=="15")
+
+asv_count_23_08_2020_g5_t15 <- asv_count_23_08_2020_g5_t15[!colSums(asv_count_23_08_2020_g5_t15)==0]
+
+dim(asv_count_23_08_2020_g5_t15)
+
+#g5_t115
+
+meta_date_23_08_2020_g5_t115 <- subset(meta_date_23_08_2020_g5, meta_date_23_08_2020_g5$treatment=="150")
+
+asv_count_23_08_2020_g5_t115 <- subset(asv_count_23_08_2020_g5, meta_date_23_08_2020_g5$treatment=="150")
+
+asv_count_23_08_2020_g5_t115 <- asv_count_23_08_2020_g5_t115[!colSums(asv_count_23_08_2020_g5_t115)==0]
+
+dim(asv_count_23_08_2020_g5_t115)
+
+#g50_t0
+
+meta_date_23_08_2020_g50_t0 <- subset(meta_date_23_08_2020_g50, meta_date_23_08_2020_g50$treatment=="0")
+
+asv_count_23_08_2020_g50_t0 <- subset(asv_count_23_08_2020_g50, meta_date_23_08_2020_g50$treatment=="0")
+
+asv_count_23_08_2020_g50_t0 <- asv_count_23_08_2020_g50_t0[!colSums(asv_count_23_08_2020_g50_t0)==0]
+
+dim(asv_count_23_08_2020_g50_t0)
+
+#g50_t15
+
+meta_date_23_08_2020_g50_t15 <- subset(meta_date_23_08_2020_g50, meta_date_23_08_2020_g50$treatment=="15")
+
+asv_count_23_08_2020_g50_t15 <- subset(asv_count_23_08_2020_g50, meta_date_23_08_2020_g50$treatment=="15")
+
+asv_count_23_08_2020_g50_t15 <- asv_count_23_08_2020_g50_t15[!colSums(asv_count_23_08_2020_g50_t15)==0]
+
+dim(asv_count_23_08_2020_g50_t15)
+
+#g50_t115
+
+meta_date_23_08_2020_g50_t115 <- subset(meta_date_23_08_2020_g50, meta_date_23_08_2020_g50$treatment=="150")
+
+asv_count_23_08_2020_g50_t115 <- subset(asv_count_23_08_2020_g50, meta_date_23_08_2020_g50$treatment=="150")
+
+asv_count_23_08_2020_g50_t115 <- asv_count_23_08_2020_g50_t115[!colSums(asv_count_23_08_2020_g50_t115)==0]
+
+dim(asv_count_23_08_2020_g50_t115)
+
+#g60_t0
+
+meta_date_23_08_2020_g60_t0 <- subset(meta_date_23_08_2020_g60, meta_date_23_08_2020_g60$treatment=="0")
+
+asv_count_23_08_2020_g60_t0 <- subset(asv_count_23_08_2020_g60, meta_date_23_08_2020_g60$treatment=="0")
+
+asv_count_23_08_2020_g60_t0 <- asv_count_23_08_2020_g60_t0[!colSums(asv_count_23_08_2020_g60_t0)==0]
+
+dim(asv_count_23_08_2020_g60_t0)
+
+#g60_t15
+
+meta_date_23_08_2020_g60_t15 <- subset(meta_date_23_08_2020_g60, meta_date_23_08_2020_g60$treatment=="15")
+
+asv_count_23_08_2020_g60_t15 <- subset(asv_count_23_08_2020_g60, meta_date_23_08_2020_g60$treatment=="15")
+
+asv_count_23_08_2020_g60_t15 <- asv_count_23_08_2020_g60_t15[!colSums(asv_count_23_08_2020_g60_t15)==0]
+
+dim(asv_count_23_08_2020_g60_t15)
+
+#g60_t115
+
+meta_date_23_08_2020_g60_t115 <- subset(meta_date_23_08_2020_g60, meta_date_23_08_2020_g60$treatment=="150")
+
+asv_count_23_08_2020_g60_t115 <- subset(asv_count_23_08_2020_g60, meta_date_23_08_2020_g60$treatment=="150")
+
+asv_count_23_08_2020_g60_t115 <- asv_count_23_08_2020_g60_t115[!colSums(asv_count_23_08_2020_g60_t115)==0]
+
+dim(asv_count_23_08_2020_g60_t115)
+
+#g65_t0
+
+meta_date_23_08_2020_g65_t0 <- subset(meta_date_23_08_2020_g65, meta_date_23_08_2020_g65$treatment=="0")
+
+asv_count_23_08_2020_g65_t0 <- subset(asv_count_23_08_2020_g65, meta_date_23_08_2020_g65$treatment=="0")
+
+asv_count_23_08_2020_g65_t0 <- asv_count_23_08_2020_g65_t0[!colSums(asv_count_23_08_2020_g65_t0)==0]
+
+dim(asv_count_23_08_2020_g65_t0)
+
+#g65_t15
+
+meta_date_23_08_2020_g65_t15 <- subset(meta_date_23_08_2020_g65, meta_date_23_08_2020_g65$treatment=="15")
+
+asv_count_23_08_2020_g65_t15 <- subset(asv_count_23_08_2020_g65, meta_date_23_08_2020_g65$treatment=="15")
+
+asv_count_23_08_2020_g65_t15 <- asv_count_23_08_2020_g65_t15[!colSums(asv_count_23_08_2020_g65_t15)==0]
+
+dim(asv_count_23_08_2020_g65_t15)
+
+#g65_t115
+
+meta_date_23_08_2020_g65_t115 <- subset(meta_date_23_08_2020_g65, meta_date_23_08_2020_g65$treatment=="150")
+
+asv_count_23_08_2020_g65_t115 <- subset(asv_count_23_08_2020_g65, meta_date_23_08_2020_g65$treatment=="150")
+
+asv_count_23_08_2020_g65_t115 <- asv_count_23_08_2020_g65_t115[!colSums(asv_count_23_08_2020_g65_t115)==0]
+
+dim(asv_count_23_08_2020_g65_t115)
+
+#g72_t0
+
+meta_date_23_08_2020_g72_t0 <- subset(meta_date_23_08_2020_g72, meta_date_23_08_2020_g72$treatment=="0")
+
+asv_count_23_08_2020_g72_t0 <- subset(asv_count_23_08_2020_g72, meta_date_23_08_2020_g72$treatment=="0")
+
+asv_count_23_08_2020_g72_t0 <- asv_count_23_08_2020_g72_t0[!colSums(asv_count_23_08_2020_g72_t0)==0]
+
+dim(asv_count_23_08_2020_g72_t0)
+
+#g72_t15
+
+meta_date_23_08_2020_g72_t15 <- subset(meta_date_23_08_2020_g72, meta_date_23_08_2020_g72$treatment=="15")
+
+asv_count_23_08_2020_g72_t15 <- subset(asv_count_23_08_2020_g72, meta_date_23_08_2020_g72$treatment=="15")
+
+asv_count_23_08_2020_g72_t15 <- asv_count_23_08_2020_g72_t15[!colSums(asv_count_23_08_2020_g72_t15)==0]
+
+dim(asv_count_23_08_2020_g72_t15)
+
+#g72_t115
+
+meta_date_23_08_2020_g72_t115 <- subset(meta_date_23_08_2020_g72, meta_date_23_08_2020_g72$treatment=="150")
+
+asv_count_23_08_2020_g72_t115 <- subset(asv_count_23_08_2020_g72, meta_date_23_08_2020_g72$treatment=="150")
+
+asv_count_23_08_2020_g72_t115 <- asv_count_23_08_2020_g72_t115[!colSums(asv_count_23_08_2020_g72_t115)==0]
+
+dim(asv_count_23_08_2020_g72_t115)
+
+#g115_t0
+
+meta_date_23_08_2020_g115_t0 <- subset(meta_date_23_08_2020_g115, meta_date_23_08_2020_g115$treatment=="0")
+
+asv_count_23_08_2020_g115_t0 <- subset(asv_count_23_08_2020_g115, meta_date_23_08_2020_g115$treatment=="0")
+
+asv_count_23_08_2020_g115_t0 <- asv_count_23_08_2020_g115_t0[!colSums(asv_count_23_08_2020_g115_t0)==0]
+
+dim(asv_count_23_08_2020_g115_t0)
+
+#g115_t15
+
+meta_date_23_08_2020_g115_t15 <- subset(meta_date_23_08_2020_g115, meta_date_23_08_2020_g115$treatment=="15")
+
+asv_count_23_08_2020_g115_t15 <- subset(asv_count_23_08_2020_g115, meta_date_23_08_2020_g115$treatment=="15")
+
+asv_count_23_08_2020_g115_t15 <- asv_count_23_08_2020_g115_t15[!colSums(asv_count_23_08_2020_g115_t15)==0]
+
+dim(asv_count_23_08_2020_g115_t15)
+
+#g115_t115
+
+meta_date_23_08_2020_g115_t115 <- subset(meta_date_23_08_2020_g115, meta_date_23_08_2020_g115$treatment=="150")
+
+asv_count_23_08_2020_g115_t115 <- subset(asv_count_23_08_2020_g115, meta_date_23_08_2020_g115$treatment=="150")
+
+asv_count_23_08_2020_g115_t115 <- asv_count_23_08_2020_g115_t115[!colSums(asv_count_23_08_2020_g115_t115)==0]
+
+dim(asv_count_23_08_2020_g115_t115)
+```
+
+# Richness analysis
+
+### ASV richness by date (rarefactions)
+
+```{r warning=FALSE}
+#| echo: false
+
+## Sequence-based asv sac:
+asv.rarefaction<-specaccum(asv_count, method="rarefaction")
+# hack specaccum object, to start at (0,0)
+asv.rarefaction$sites <- c(0, asv.rarefaction$sites)
+asv.rarefaction$richness <- c(0, asv.rarefaction$richness)
+asv.rarefaction$sd <- c(0, asv.rarefaction$sd)
+asv.rarefaction$individuals <- c(0, asv.rarefaction$individuals)
+
+# Sample-based accumulation curve scaled to the number of reads.
+asv.cole<-specaccum(asv_count, method="coleman")
+# hack specaccum object, to start at (0,0)
+asv.cole$sites <- c(0, asv.cole$sites)
+asv.cole$richness <- c(0, asv.cole$richness)
+asv.cole$sd <- c(0, asv.cole$sd)
+asv.cole$individuals <- c(0, asv.cole$individuals)
+
+```
+
+```{r warning=FALSE}
+#| echo: false
+asv_count_22_06_2020.rarefaction<-specaccum(asv_count_22_06_2020, method="rarefaction")
+# hack specaccum object, to start at (0,0)
+asv_count_22_06_2020.rarefaction$sites <- c(0, asv_count_22_06_2020.rarefaction$sites)
+asv_count_22_06_2020.rarefaction$richness <- c(0, asv_count_22_06_2020.rarefaction$richness)
+asv_count_22_06_2020.rarefaction$sd <- c(0, asv_count_22_06_2020.rarefaction$sd)
+asv_count_22_06_2020.rarefaction$individuals <- c(0, asv_count_22_06_2020.rarefaction$individuals)
+
+# Sample-based accumulation curve scaled to the number of reads.
+asv_count_22_06_2020.cole<-specaccum(asv_count_22_06_2020, method="coleman")
+# hack specaccum object, to start at (0,0)
+asv_count_22_06_2020.cole$sites <- c(0, asv_count_22_06_2020.cole$sites)
+asv_count_22_06_2020.cole$richness <- c(0, asv_count_22_06_2020.cole$richness)
+asv_count_22_06_2020.cole$sd <- c(0, asv_count_22_06_2020.cole$sd)
+asv_count_22_06_2020.cole$individuals <- c(0, asv_count_22_06_2020.cole$individuals)
+
+# asv_count_14_07_2020:
+asv_count_14_07_2020.rarefaction<-specaccum(asv_count_14_07_2020, method="rarefaction")
+# hack specaccum object, to start at (0,0)
+asv_count_14_07_2020.rarefaction$sites <- c(0, asv_count_14_07_2020.rarefaction$sites)
+asv_count_14_07_2020.rarefaction$richness <- c(0, asv_count_14_07_2020.rarefaction$richness)
+asv_count_14_07_2020.rarefaction$sd <- c(0, asv_count_14_07_2020.rarefaction$sd)
+asv_count_14_07_2020.rarefaction$individuals <- c(0, asv_count_14_07_2020.rarefaction$individuals)
+
+# Sample-based accumulation curve scaled to the number of reads.
+asv_count_14_07_2020.cole<-specaccum(asv_count_14_07_2020, method="coleman")
+# hack specaccum object, to start at (0,0)
+asv_count_14_07_2020.cole$sites <- c(0, asv_count_14_07_2020.cole$sites)
+asv_count_14_07_2020.cole$richness <- c(0, asv_count_14_07_2020.cole$richness)
+asv_count_14_07_2020.cole$sd <- c(0, asv_count_14_07_2020.cole$sd)
+asv_count_14_07_2020.cole$individuals <- c(0, asv_count_14_07_2020.cole$individuals)
+
+# asv_count_06_08_2020:
+asv_count_06_08_2020.rarefaction<-specaccum(asv_count_06_08_2020, method="rarefaction")
+# hack specaccum object, to start at (0,0)
+asv_count_06_08_2020.rarefaction$sites <- c(0, asv_count_06_08_2020.rarefaction$sites)
+asv_count_06_08_2020.rarefaction$richness <- c(0, asv_count_06_08_2020.rarefaction$richness)
+asv_count_06_08_2020.rarefaction$sd <- c(0, asv_count_06_08_2020.rarefaction$sd)
+asv_count_06_08_2020.rarefaction$individuals <- c(0, asv_count_06_08_2020.rarefaction$individuals)
+
+# Sample-based accumulation curve scaled to the number of reads.
+asv_count_06_08_2020.cole<-specaccum(asv_count_06_08_2020, method="coleman")
+# hack specaccum object, to start at (0,0)
+asv_count_06_08_2020.cole$sites <- c(0, asv_count_06_08_2020.cole$sites)
+asv_count_06_08_2020.cole$richness <- c(0, asv_count_06_08_2020.cole$richness)
+asv_count_06_08_2020.cole$sd <- c(0, asv_count_06_08_2020.cole$sd)
+asv_count_06_08_2020.cole$individuals <- c(0, asv_count_06_08_2020.cole$individuals)
+
+# asv_count_23_08_2020:
+asv_count_23_08_2020.rarefaction<-specaccum(asv_count_23_08_2020, method="rarefaction")
+# hack specaccum object, to start at (0,0)
+asv_count_23_08_2020.rarefaction$sites <- c(0, asv_count_23_08_2020.rarefaction$sites)
+asv_count_23_08_2020.rarefaction$richness <- c(0, asv_count_23_08_2020.rarefaction$richness)
+asv_count_23_08_2020.rarefaction$sd <- c(0, asv_count_23_08_2020.rarefaction$sd)
+asv_count_23_08_2020.rarefaction$individuals <- c(0, asv_count_23_08_2020.rarefaction$individuals)
+
+# Sample-based accumulation curve scaled to the number of reads.
+asv_count_23_08_2020.cole<-specaccum(asv_count_23_08_2020, method="coleman")
+# hack specaccum object, to start at (0,0)
+asv_count_23_08_2020.cole$sites <- c(0, asv_count_23_08_2020.cole$sites)
+asv_count_23_08_2020.cole$richness <- c(0, asv_count_23_08_2020.cole$richness)
+asv_count_23_08_2020.cole$sd <- c(0, asv_count_23_08_2020.cole$sd)
+asv_count_23_08_2020.cole$individuals <- c(0, asv_count_23_08_2020.cole$individuals)
+
+
+# asv_count_23_06_2021:
+asv_count_23_06_2021.rarefaction<-specaccum(asv_count_23_06_2021, method="rarefaction")
+# hack specaccum object, to start at (0,0)
+asv_count_23_06_2021.rarefaction$sites <- c(0, asv_count_23_06_2021.rarefaction$sites)
+asv_count_23_06_2021.rarefaction$richness <- c(0, asv_count_23_06_2021.rarefaction$richness)
+asv_count_23_06_2021.rarefaction$sd <- c(0, asv_count_23_06_2021.rarefaction$sd)
+asv_count_23_06_2021.rarefaction$individuals <- c(0, asv_count_23_06_2021.rarefaction$individuals)
+
+# Sample-based accumulation curve scaled to the number of reads.
+asv_count_23_06_2021.cole<-specaccum(asv_count_23_06_2021, method="coleman")
+# hack specaccum object, to start at (0,0)
+asv_count_23_06_2021.cole$sites <- c(0, asv_count_23_06_2021.cole$sites)
+asv_count_23_06_2021.cole$richness <- c(0, asv_count_23_06_2021.cole$richness)
+asv_count_23_06_2021.cole$sd <- c(0, asv_count_23_06_2021.cole$sd)
+asv_count_23_06_2021.cole$individuals <- c(0, asv_count_23_06_2021.cole$individuals)
+
+# asv_count_14_07_2021:
+asv_count_14_07_2021.rarefaction<-specaccum(asv_count_14_07_2021, method="rarefaction")
+# hack specaccum object, to start at (0,0)
+asv_count_14_07_2021.rarefaction$sites <- c(0, asv_count_14_07_2021.rarefaction$sites)
+asv_count_14_07_2021.rarefaction$richness <- c(0, asv_count_14_07_2021.rarefaction$richness)
+asv_count_14_07_2021.rarefaction$sd <- c(0, asv_count_14_07_2021.rarefaction$sd)
+asv_count_14_07_2021.rarefaction$individuals <- c(0, asv_count_14_07_2021.rarefaction$individuals)
+
+# Sample-based accumulation curve scaled to the number of reads.
+asv_count_14_07_2021.cole<-specaccum(asv_count_14_07_2021, method="coleman")
+# hack specaccum object, to start at (0,0)
+asv_count_14_07_2021.cole$sites <- c(0, asv_count_14_07_2021.cole$sites)
+asv_count_14_07_2021.cole$richness <- c(0, asv_count_14_07_2021.cole$richness)
+asv_count_14_07_2021.cole$sd <- c(0, asv_count_14_07_2021.cole$sd)
+asv_count_14_07_2021.cole$individuals <- c(0, asv_count_14_07_2021.cole$individuals)
+
+# asv_count_24_08_2021:
+asv_count_24_08_2021.rarefaction<-specaccum(asv_count_24_08_2021, method="rarefaction")
+# hack specaccum object, to start at (0,0)
+asv_count_24_08_2021.rarefaction$sites <- c(0, asv_count_24_08_2021.rarefaction$sites)
+asv_count_24_08_2021.rarefaction$richness <- c(0, asv_count_24_08_2021.rarefaction$richness)
+asv_count_24_08_2021.rarefaction$sd <- c(0, asv_count_24_08_2021.rarefaction$sd)
+asv_count_24_08_2021.rarefaction$individuals <- c(0, asv_count_24_08_2021.rarefaction$individuals)
+
+# Sample-based accumulation curve scaled to the number of reads.
+asv_count_24_08_2021.cole<-specaccum(asv_count_24_08_2021, method="coleman")
+# hack specaccum object, to start at (0,0)
+asv_count_24_08_2021.cole$sites <- c(0, asv_count_24_08_2021.cole$sites)
+asv_count_24_08_2021.cole$richness <- c(0, asv_count_24_08_2021.cole$richness)
+asv_count_24_08_2021.cole$sd <- c(0, asv_count_24_08_2021.cole$sd)
+asv_count_24_08_2021.cole$individuals <- c(0, asv_count_24_08_2021.cole$individuals)
+
+# combine data
+n <- max(length(asv.cole$richness))
+length(asv_count_24_08_2021.cole$richness) <- n
+length(asv_count_24_08_2021.rarefaction$individuals) <- n
+length(asv_count_14_07_2021.cole$richness) <- n
+length(asv_count_14_07_2021.rarefaction$individuals) <- n
+length(asv_count_23_06_2021.cole$richness) <- n
+length(asv_count_23_06_2021.rarefaction$individuals) <- n
+length(asv_count_23_08_2020.cole$richness) <- n
+length(asv_count_23_08_2020.rarefaction$individuals) <- n
+length(asv_count_06_08_2020.cole$richness) <- n
+length(asv_count_06_08_2020.rarefaction$individuals) <- n
+length(asv_count_14_07_2020.cole$richness) <- n
+length(asv_count_14_07_2020.rarefaction$individuals) <- n
+length(asv_count_22_06_2020.cole$richness) <- n
+length(asv_count_22_06_2020.rarefaction$individuals) <- n
+
+
+asv.combined_date <- rbind(asv.cole$richness , asv.rarefaction$individuals,
+                      asv_count_22_06_2020.cole$richness, asv_count_22_06_2020.rarefaction$individuals,
+                      asv_count_14_07_2020.cole$richness, asv_count_14_07_2020.rarefaction$individuals,
+                      asv_count_06_08_2020.cole$richness, asv_count_06_08_2020.rarefaction$individuals,
+                      asv_count_23_08_2020.cole$richness, asv_count_23_08_2020.rarefaction$individuals,
+                      asv_count_23_06_2021.cole$richness, asv_count_23_06_2021.rarefaction$individuals,
+                      asv_count_14_07_2021.cole$richness, asv_count_14_07_2021.rarefaction$individuals,
+                      asv_count_24_08_2021.cole$richness, asv_count_24_08_2021.rarefaction$individuals,
+                      deparse.level=2)
+```
+
+## Figure 1: accumulations curves
+
+transpose accumulation table
+
+```{r}
+
+asv.combined_dt <- as.data.frame(asv.combined_date)
+
+asv.combined <- as.data.frame(t(asv.combined_dt))
+
+## scaling 1e106 to 1 x 10^6
+# https://community.rstudio.com/t/formatting-the-x-axis-with-exponent-values-in-r-plot/34055/3
+scientific <- function(x){
+    ifelse(x==0, "0", parse(text=gsub("[+]", "", gsub("e", " %*% 10^", scientific_format()(x)))))
+}
+
+```
+
+### fig.1a
+
+```{r warning=FALSE}
+a_2020 <- 
+  ggplot(asv.combined)+
+  #geom_point(aes(x = asv.combined[,2], y = asv.combined[,1]), size = 1) +
+  geom_point(aes(x = asv.combined[,4], y = asv.combined[,3]), size = 0.1, colour = "gray") +
+  # geom_point(aes(x = asv.combined[,12], y = asv.combined[,11]), size = 0.1, colour = "gray") +
+  geom_point(aes(x = asv.combined[,6], y = asv.combined[,5]), size = 0.1, colour = "gray") +
+  # geom_point(aes(x = asv.combined[,14], y = asv.combined[,13]), size = 0.1, colour = "gray") +
+  geom_point(aes(x = asv.combined[,8], y = asv.combined[,7]), size = 0.1, colour = "gray") +
+  geom_point(aes(x = asv.combined[,10], y = asv.combined[,9]), size = 0.1, colour = "gray") +
+  # geom_point(aes(x = asv.combined[,16], y = asv.combined[,15]), size = 0.1, colour = "gray") +
+  geom_line(aes(x = asv.combined[,10], y = asv.combined[,9], col = "08(W4.20)"), size = 1) +
+  geom_line(aes(x = asv.combined[,8], y = asv.combined[,7], col = "08(W1.20)"), size = 1) +
+  # geom_line(aes(x = asv.combined[,16], y = asv.combined[,15], col = "08(W4.21)"), size = 1) +
+  geom_line(aes(x = asv.combined[,6], y = asv.combined[,5], col = "07(20)"), size = 1) +
+  # geom_line(aes(x = asv.combined[,14], y = asv.combined[,13], col = "07(21)"), size = 1) +
+  geom_line(aes(x = asv.combined[,4], y = asv.combined[,3], col = "06(20)"), size = 1) +
+  # geom_line(aes(x = asv.combined[,12], y = asv.combined[,11], col = "06(21)"), size = 1) +
+  theme_classic()+  #theme(axis.text.x= element_text(angle = 90,hjust=1,vjust=0.5))
+  labs(y = "ASV", x = "Reads") + theme(legend.position = "right") + 
+  scale_color_manual(breaks = c("08(W4.20)","08(W1.20)","08(W4.21)","07(20)","07(21)","06(20)", "06(21)"), values = c("#440154FF" , "#46337EFF", "#365C8DFF", "#277F8EFF", "#1FA187FF", "#4AC16DFF", "#9FDA3AFF", "#FDE725FF"), name = "Date") +
+  scale_x_continuous(breaks=seq(0e6,8e6,2e6), label=scientific)
+```
+
+### fig.1b
+
+```{r warning=FALSE}
+a_2021 <- 
+  ggplot(asv.combined)+
+  geom_point(aes(x = asv.combined[,12], y = asv.combined[,11]), size = 0.1, colour = "gray") +
+  geom_point(aes(x = asv.combined[,14], y = asv.combined[,13]), size = 0.1, colour = "gray") +
+  geom_point(aes(x = asv.combined[,16], y = asv.combined[,15]), size = 0.1, colour = "gray") +
+  geom_line(aes(x = asv.combined[,16], y = asv.combined[,15], col = "08(W4.21)"), size = 1) +
+  geom_line(aes(x = asv.combined[,14], y = asv.combined[,13], col = "07(21)"), size = 1) +
+  geom_line(aes(x = asv.combined[,12], y = asv.combined[,11], col = "06(21)"), size = 1) +
+  theme_classic()+  #theme(axis.text.x= element_text(angle = 90,hjust=1,vjust=0.5))
+  labs(y = "ASV", x = "Reads") + theme(legend.position = "right") + 
+  scale_color_manual(breaks = c("08(W4.20)","08(W1.20)","08(W4.21)","07(20)","07(21)","06(20)", "06(21)"), values = c("#440154FF" , "#46337EFF", "#365C8DFF", "#277F8EFF", "#1FA187FF", "#4AC16DFF", "#9FDA3AFF", "#FDE725FF"), name = "Date") +
+  scale_x_continuous(breaks=seq(0e6,8e6,1e6), label=scientific)
+
+```
+
+### fig.1c
+
+Treatment control 2020 & 2021
+
+```{r warning=FALSE}
+#| echo: false
+asv_count_22_06_2020_t0.rarefaction<-specaccum(asv_count_22_06_2020_t0, method="rarefaction")
+# hack specaccum object, to start at (0,0)
+asv_count_22_06_2020_t0.rarefaction$sites <- c(0, asv_count_22_06_2020_t0.rarefaction$sites)
+asv_count_22_06_2020_t0.rarefaction$richness <- c(0, asv_count_22_06_2020_t0.rarefaction$richness)
+asv_count_22_06_2020_t0.rarefaction$sd <- c(0, asv_count_22_06_2020_t0.rarefaction$sd)
+asv_count_22_06_2020_t0.rarefaction$individuals <- c(0, asv_count_22_06_2020_t0.rarefaction$individuals)
+
+# Sample-based accumulation curve scaled to the number of reads.
+asv_count_22_06_2020_t0.cole<-specaccum(asv_count_22_06_2020_t0, method="coleman")
+# hack specaccum object, to start at (0,0)
+asv_count_22_06_2020_t0.cole$sites <- c(0, asv_count_22_06_2020_t0.cole$sites)
+asv_count_22_06_2020_t0.cole$richness <- c(0, asv_count_22_06_2020_t0.cole$richness)
+asv_count_22_06_2020_t0.cole$sd <- c(0, asv_count_22_06_2020_t0.cole$sd)
+asv_count_22_06_2020_t0.cole$individuals <- c(0, asv_count_22_06_2020_t0.cole$individuals)
+
+# asv_count_14_07_2020_t0:
+asv_count_14_07_2020_t0.rarefaction<-specaccum(asv_count_14_07_2020_t0, method="rarefaction")
+# hack specaccum object, to start at (0,0)
+asv_count_14_07_2020_t0.rarefaction$sites <- c(0, asv_count_14_07_2020_t0.rarefaction$sites)
+asv_count_14_07_2020_t0.rarefaction$richness <- c(0, asv_count_14_07_2020_t0.rarefaction$richness)
+asv_count_14_07_2020_t0.rarefaction$sd <- c(0, asv_count_14_07_2020_t0.rarefaction$sd)
+asv_count_14_07_2020_t0.rarefaction$individuals <- c(0, asv_count_14_07_2020_t0.rarefaction$individuals)
+
+# Sample-based accumulation curve scaled to the number of reads.
+asv_count_14_07_2020_t0.cole<-specaccum(asv_count_14_07_2020_t0, method="coleman")
+# hack specaccum object, to start at (0,0)
+asv_count_14_07_2020_t0.cole$sites <- c(0, asv_count_14_07_2020_t0.cole$sites)
+asv_count_14_07_2020_t0.cole$richness <- c(0, asv_count_14_07_2020_t0.cole$richness)
+asv_count_14_07_2020_t0.cole$sd <- c(0, asv_count_14_07_2020_t0.cole$sd)
+asv_count_14_07_2020_t0.cole$individuals <- c(0, asv_count_14_07_2020_t0.cole$individuals)
+
+# asv_count_06_08_2020_t0:
+asv_count_06_08_2020_t0.rarefaction<-specaccum(asv_count_06_08_2020_t0, method="rarefaction")
+# hack specaccum object, to start at (0,0)
+asv_count_06_08_2020_t0.rarefaction$sites <- c(0, asv_count_06_08_2020_t0.rarefaction$sites)
+asv_count_06_08_2020_t0.rarefaction$richness <- c(0, asv_count_06_08_2020_t0.rarefaction$richness)
+asv_count_06_08_2020_t0.rarefaction$sd <- c(0, asv_count_06_08_2020_t0.rarefaction$sd)
+asv_count_06_08_2020_t0.rarefaction$individuals <- c(0, asv_count_06_08_2020_t0.rarefaction$individuals)
+
+# Sample-based accumulation curve scaled to the number of reads.
+asv_count_06_08_2020_t0.cole<-specaccum(asv_count_06_08_2020_t0, method="coleman")
+# hack specaccum object, to start at (0,0)
+asv_count_06_08_2020_t0.cole$sites <- c(0, asv_count_06_08_2020_t0.cole$sites)
+asv_count_06_08_2020_t0.cole$richness <- c(0, asv_count_06_08_2020_t0.cole$richness)
+asv_count_06_08_2020_t0.cole$sd <- c(0, asv_count_06_08_2020_t0.cole$sd)
+asv_count_06_08_2020_t0.cole$individuals <- c(0, asv_count_06_08_2020_t0.cole$individuals)
+
+# asv_count_23_08_2020_t0:
+asv_count_23_08_2020_t0.rarefaction<-specaccum(asv_count_23_08_2020_t0, method="rarefaction")
+# hack specaccum object, to start at (0,0)
+asv_count_23_08_2020_t0.rarefaction$sites <- c(0, asv_count_23_08_2020_t0.rarefaction$sites)
+asv_count_23_08_2020_t0.rarefaction$richness <- c(0, asv_count_23_08_2020_t0.rarefaction$richness)
+asv_count_23_08_2020_t0.rarefaction$sd <- c(0, asv_count_23_08_2020_t0.rarefaction$sd)
+asv_count_23_08_2020_t0.rarefaction$individuals <- c(0, asv_count_23_08_2020_t0.rarefaction$individuals)
+
+# Sample-based accumulation curve scaled to the number of reads.
+asv_count_23_08_2020_t0.cole<-specaccum(asv_count_23_08_2020_t0, method="coleman")
+# hack specaccum object, to start at (0,0)
+asv_count_23_08_2020_t0.cole$sites <- c(0, asv_count_23_08_2020_t0.cole$sites)
+asv_count_23_08_2020_t0.cole$richness <- c(0, asv_count_23_08_2020_t0.cole$richness)
+asv_count_23_08_2020_t0.cole$sd <- c(0, asv_count_23_08_2020_t0.cole$sd)
+asv_count_23_08_2020_t0.cole$individuals <- c(0, asv_count_23_08_2020_t0.cole$individuals)
+
+
+# asv_count_23_06_2021_t0:
+asv_count_23_06_2021_t0.rarefaction<-specaccum(asv_count_23_06_2021_t0, method="rarefaction")
+# hack specaccum object, to start at (0,0)
+asv_count_23_06_2021_t0.rarefaction$sites <- c(0, asv_count_23_06_2021_t0.rarefaction$sites)
+asv_count_23_06_2021_t0.rarefaction$richness <- c(0, asv_count_23_06_2021_t0.rarefaction$richness)
+asv_count_23_06_2021_t0.rarefaction$sd <- c(0, asv_count_23_06_2021_t0.rarefaction$sd)
+asv_count_23_06_2021_t0.rarefaction$individuals <- c(0, asv_count_23_06_2021_t0.rarefaction$individuals)
+
+# Sample-based accumulation curve scaled to the number of reads.
+asv_count_23_06_2021_t0.cole<-specaccum(asv_count_23_06_2021_t0, method="coleman")
+# hack specaccum object, to start at (0,0)
+asv_count_23_06_2021_t0.cole$sites <- c(0, asv_count_23_06_2021_t0.cole$sites)
+asv_count_23_06_2021_t0.cole$richness <- c(0, asv_count_23_06_2021_t0.cole$richness)
+asv_count_23_06_2021_t0.cole$sd <- c(0, asv_count_23_06_2021_t0.cole$sd)
+asv_count_23_06_2021_t0.cole$individuals <- c(0, asv_count_23_06_2021_t0.cole$individuals)
+
+# asv_count_14_07_2021_t0:
+asv_count_14_07_2021_t0.rarefaction<-specaccum(asv_count_14_07_2021_t0, method="rarefaction")
+# hack specaccum object, to start at (0,0)
+asv_count_14_07_2021_t0.rarefaction$sites <- c(0, asv_count_14_07_2021_t0.rarefaction$sites)
+asv_count_14_07_2021_t0.rarefaction$richness <- c(0, asv_count_14_07_2021_t0.rarefaction$richness)
+asv_count_14_07_2021_t0.rarefaction$sd <- c(0, asv_count_14_07_2021_t0.rarefaction$sd)
+asv_count_14_07_2021_t0.rarefaction$individuals <- c(0, asv_count_14_07_2021_t0.rarefaction$individuals)
+
+# Sample-based accumulation curve scaled to the number of reads.
+asv_count_14_07_2021_t0.cole<-specaccum(asv_count_14_07_2021_t0, method="coleman")
+# hack specaccum object, to start at (0,0)
+asv_count_14_07_2021_t0.cole$sites <- c(0, asv_count_14_07_2021_t0.cole$sites)
+asv_count_14_07_2021_t0.cole$richness <- c(0, asv_count_14_07_2021_t0.cole$richness)
+asv_count_14_07_2021_t0.cole$sd <- c(0, asv_count_14_07_2021_t0.cole$sd)
+asv_count_14_07_2021_t0.cole$individuals <- c(0, asv_count_14_07_2021_t0.cole$individuals)
+
+# asv_count_24_08_2021_t0:
+asv_count_24_08_2021_t0.rarefaction<-specaccum(asv_count_24_08_2021_t0, method="rarefaction")
+# hack specaccum object, to start at (0,0)
+asv_count_24_08_2021_t0.rarefaction$sites <- c(0, asv_count_24_08_2021_t0.rarefaction$sites)
+asv_count_24_08_2021_t0.rarefaction$richness <- c(0, asv_count_24_08_2021_t0.rarefaction$richness)
+asv_count_24_08_2021_t0.rarefaction$sd <- c(0, asv_count_24_08_2021_t0.rarefaction$sd)
+asv_count_24_08_2021_t0.rarefaction$individuals <- c(0, asv_count_24_08_2021_t0.rarefaction$individuals)
+
+# Sample-based accumulation curve scaled to the number of reads.
+asv_count_24_08_2021_t0.cole<-specaccum(asv_count_24_08_2021_t0, method="coleman")
+# hack specaccum object, to start at (0,0)
+asv_count_24_08_2021_t0.cole$sites <- c(0, asv_count_24_08_2021_t0.cole$sites)
+asv_count_24_08_2021_t0.cole$richness <- c(0, asv_count_24_08_2021_t0.cole$richness)
+asv_count_24_08_2021_t0.cole$sd <- c(0, asv_count_24_08_2021_t0.cole$sd)
+asv_count_24_08_2021_t0.cole$individuals <- c(0, asv_count_24_08_2021_t0.cole$individuals)
+
+# combine data
+n <- max(length(asv.cole$richness))#,
+         # length(asv_count_14_07_2021_t0.cole$richness),
+         # length(asv_count_23_06_2021_t0.cole$richness))
+length(asv_count_24_08_2021_t0.cole$richness) <- n
+length(asv_count_24_08_2021_t0.rarefaction$individuals) <- n
+length(asv_count_14_07_2021_t0.cole$richness) <- n
+length(asv_count_14_07_2021_t0.rarefaction$individuals) <- n
+length(asv_count_23_06_2021_t0.cole$richness) <- n
+length(asv_count_23_06_2021_t0.rarefaction$individuals) <- n
+length(asv_count_23_08_2020_t0.cole$richness) <- n
+length(asv_count_23_08_2020_t0.rarefaction$individuals) <- n
+length(asv_count_06_08_2020_t0.cole$richness) <- n
+length(asv_count_06_08_2020_t0.rarefaction$individuals) <- n
+length(asv_count_14_07_2020_t0.cole$richness) <- n
+length(asv_count_14_07_2020_t0.rarefaction$individuals) <- n
+length(asv_count_22_06_2020_t0.cole$richness) <- n
+length(asv_count_22_06_2020_t0.rarefaction$individuals) <- n
+
+
+asv.combined_date_t0 <- rbind(asv.cole$richness , asv.rarefaction$individuals,
+                      asv_count_22_06_2020_t0.cole$richness, asv_count_22_06_2020_t0.rarefaction$individuals,
+                      asv_count_14_07_2020_t0.cole$richness, asv_count_14_07_2020_t0.rarefaction$individuals,
+                      asv_count_06_08_2020_t0.cole$richness, asv_count_06_08_2020_t0.rarefaction$individuals,
+                      asv_count_23_08_2020_t0.cole$richness, asv_count_23_08_2020_t0.rarefaction$individuals,
+                      asv_count_23_06_2021_t0.cole$richness, asv_count_23_06_2021_t0.rarefaction$individuals,
+                      asv_count_14_07_2021_t0.cole$richness, asv_count_14_07_2021_t0.rarefaction$individuals,
+                      asv_count_24_08_2021_t0.cole$richness, asv_count_24_08_2021_t0.rarefaction$individuals,
+                      deparse.level=2)
+```
+
+```{r warning=FALSE}
+asv.combined_date_t0 <- as.data.frame(asv.combined_date_t0)
+
+asv.combined_cont <- as.data.frame(t(asv.combined_date_t0))
+
+at0 <- 
+  ggplot(asv.combined_cont)+
+  #geom_point(aes(x = asv.combined_cont[,2], y = asv.combined_cont[,1]), size = 1) +
+  geom_point(aes(x = asv.combined_cont[,4], y = asv.combined_cont[,3]), size = 0.1, colour = "gray") +
+  geom_point(aes(x = asv.combined_cont[,12], y = asv.combined_cont[,11]), size = 0.1, colour = "gray") +
+  geom_point(aes(x = asv.combined_cont[,6], y = asv.combined_cont[,5]), size = 0.1, colour = "gray") +
+  geom_point(aes(x = asv.combined_cont[,14], y = asv.combined_cont[,13]), size = 0.1, colour = "gray") +
+  geom_point(aes(x = asv.combined_cont[,8], y = asv.combined_cont[,7]), size = 0.1, colour = "gray") +
+  geom_point(aes(x = asv.combined_cont[,10], y = asv.combined_cont[,9]), size = 0.1, colour = "gray") +
+  geom_point(aes(x = asv.combined_cont[,16], y = asv.combined_cont[,15]), size = 0.1, colour = "gray") +
+  geom_line(aes(x = asv.combined_cont[,10], y = asv.combined_cont[,9], col = "08(W4.20)"), size = 1) +
+  geom_line(aes(x = asv.combined_cont[,8], y = asv.combined_cont[,7], col = "08(W1.20)"), size = 1) +
+  geom_line(aes(x = asv.combined_cont[,16], y = asv.combined_cont[,15], col = "08(W4.21)"), size = 1) +
+  geom_line(aes(x = asv.combined_cont[,6], y = asv.combined_cont[,5], col = "07(20)"), size = 1) +
+  geom_line(aes(x = asv.combined_cont[,14], y = asv.combined_cont[,13], col = "07(21)"), size = 1) +
+  geom_line(aes(x = asv.combined_cont[,4], y = asv.combined_cont[,3], col = "06(20)"), size = 1) +
+  geom_line(aes(x = asv.combined_cont[,12], y = asv.combined_cont[,11], col = "06(21)"), size = 1) +
+  theme_classic()+  #theme(axis.text.x= element_text(angle = 90,hjust=1,vjust=0.5))
+  labs(y = "ASV", x = "Reads") + theme(legend.position = "right") +
+  scale_color_manual(breaks = c("08(W4.20)","08(W1.20)","08(W4.21)","07(20)","07(21)","06(20)", "06(21)"), values = c("#440154FF" , "#46337EFF", "#365C8DFF", "#277F8EFF", "#1FA187FF", "#4AC16DFF", "#9FDA3AFF", "#FDE725FF"), name = "Date") +
+  scale_x_continuous(breaks=seq(0e6,3e6,1e6), label=scientific)
+
+at0
+    
+```
+
+rarefaction genotype
+
+```{r warning=FALSE}
+#| echo: false
+
+# g5
+## seq based
+asv_count_g5.rarefaction<-specaccum(asv_count_g5, method="rarefaction")
+# hack specaccum object, to start at (0,0)
+asv_count_g5.rarefaction$sites <- c(0, asv_count_g5.rarefaction$sites)
+asv_count_g5.rarefaction$richness <- c(0, asv_count_g5.rarefaction$richness)
+asv_count_g5.rarefaction$sd <- c(0, asv_count_g5.rarefaction$sd)
+asv_count_g5.rarefaction$individuals <- c(0, asv_count_g5.rarefaction$individuals)
+
+# Sample-based ac curve scaled to the number of reads.
+asv_count_g5.cole<-specaccum(asv_count_g5, method="coleman")
+# hack specaccum object, to start at (0,0)
+asv_count_g5.cole$sites <- c(0, asv_count_g5.cole$sites)
+asv_count_g5.cole$richness <- c(0, asv_count_g5.cole$richness)
+asv_count_g5.cole$sd <- c(0, asv_count_g5.cole$sd)
+asv_count_g5.cole$individuals <- c(0, asv_count_g5.cole$individuals)
+
+# g50:
+## seq based
+asv_count_g50.rarefaction<-specaccum(asv_count_g50, method="rarefaction")
+# hack specaccum object, to start at (0,0)
+asv_count_g50.rarefaction$sites <- c(0, asv_count_g50.rarefaction$sites)
+asv_count_g50.rarefaction$richness <- c(0, asv_count_g50.rarefaction$richness)
+asv_count_g50.rarefaction$sd <- c(0, asv_count_g50.rarefaction$sd)
+asv_count_g50.rarefaction$individuals <- c(0, asv_count_g50.rarefaction$individuals)
+
+# Sample-based valley accumulation curve scaled to the number of reads.
+asv_count_g50.cole<-specaccum(asv_count_g50, method="coleman")
+# hack specaccum object, to start at (0,0)
+asv_count_g50.cole$sites <- c(0, asv_count_g50.cole$sites)
+asv_count_g50.cole$richness <- c(0, asv_count_g50.cole$richness)
+asv_count_g50.cole$sd <- c(0, asv_count_g50.cole$sd)
+asv_count_g50.cole$individuals <- c(0, asv_count_g50.cole$individuals)
+
+# g 60
+## seq based
+asv_count_g60.rarefaction<-specaccum(asv_count_g60, method="rarefaction")
+# hack specaccum object, to start at (0,0)
+asv_count_g60.rarefaction$sites <- c(0, asv_count_g60.rarefaction$sites)
+asv_count_g60.rarefaction$richness <- c(0, asv_count_g60.rarefaction$richness)
+asv_count_g60.rarefaction$sd <- c(0, asv_count_g60.rarefaction$sd)
+asv_count_g60.rarefaction$individuals <- c(0, asv_count_g60.rarefaction$individuals)
+
+# Sample-based mountain accumulation curve scaled to the number of reads.
+asv_count_g60.cole<-specaccum(asv_count_g60, method="coleman")
+# hack specaccum object, to start at (0,0)
+asv_count_g60.cole$sites <- c(0, asv_count_g60.cole$sites)
+asv_count_g60.cole$richness <- c(0, asv_count_g60.cole$richness)
+asv_count_g60.cole$sd <- c(0, asv_count_g60.cole$sd)
+asv_count_g60.cole$individuals <- c(0, asv_count_g60.cole$individuals)
+
+# g65
+## seq based
+asv_count_g65.rarefaction<-specaccum(asv_count_g65, method="rarefaction")
+# hack specaccum object, to start at (0,0)
+asv_count_g65.rarefaction$sites <- c(0, asv_count_g65.rarefaction$sites)
+asv_count_g65.rarefaction$richness <- c(0, asv_count_g65.rarefaction$richness)
+asv_count_g65.rarefaction$sd <- c(0, asv_count_g65.rarefaction$sd)
+asv_count_g65.rarefaction$individuals <- c(0, asv_count_g65.rarefaction$individuals)
+
+# Sample-based mountain accumulation curve scaled to the number of reads.
+asv_count_g65.cole<-specaccum(asv_count_g65, method="coleman")
+# hack specaccum object, to start at (0,0)
+asv_count_g65.cole$sites <- c(0, asv_count_g65.cole$sites)
+asv_count_g65.cole$richness <- c(0, asv_count_g65.cole$richness)
+asv_count_g65.cole$sd <- c(0, asv_count_g65.cole$sd)
+asv_count_g65.cole$individuals <- c(0, asv_count_g65.cole$individuals)
+
+# g 72
+## seq based
+asv_count_g72.rarefaction<-specaccum(asv_count_g72, method="rarefaction")
+# hack specaccum object, to start at (0,0)
+asv_count_g72.rarefaction$sites <- c(0, asv_count_g72.rarefaction$sites)
+asv_count_g72.rarefaction$richness <- c(0, asv_count_g72.rarefaction$richness)
+asv_count_g72.rarefaction$sd <- c(0, asv_count_g72.rarefaction$sd)
+asv_count_g72.rarefaction$individuals <- c(0, asv_count_g72.rarefaction$individuals)
+
+# Sample-based mountain accumulation curve scaled to the number of reads.
+asv_count_g72.cole<-specaccum(asv_count_g72, method="coleman")
+# hack specaccum object, to start at (0,0)
+asv_count_g72.cole$sites <- c(0, asv_count_g72.cole$sites)
+asv_count_g72.cole$richness <- c(0, asv_count_g72.cole$richness)
+asv_count_g72.cole$sd <- c(0, asv_count_g72.cole$sd)
+asv_count_g72.cole$individuals <- c(0, asv_count_g72.cole$individuals)
+
+# g 115
+## seq based
+asv_count_g115.rarefaction<-specaccum(asv_count_g115, method="rarefaction")
+# hack specaccum object, to start at (0,0)
+asv_count_g115.rarefaction$sites <- c(0, asv_count_g115.rarefaction$sites)
+asv_count_g115.rarefaction$richness <- c(0, asv_count_g115.rarefaction$richness)
+asv_count_g115.rarefaction$sd <- c(0, asv_count_g115.rarefaction$sd)
+asv_count_g115.rarefaction$individuals <- c(0, asv_count_g115.rarefaction$individuals)
+
+# Sample-based mountain accumulation curve scaled to the number of reads.
+asv_count_g115.cole<-specaccum(asv_count_g115, method="coleman")
+# hack specaccum object, to start at (0,0)
+asv_count_g115.cole$sites <- c(0, asv_count_g115.cole$sites)
+asv_count_g115.cole$richness <- c(0, asv_count_g115.cole$richness)
+asv_count_g115.cole$sd <- c(0, asv_count_g115.cole$sd)
+asv_count_g115.cole$individuals <- c(0, asv_count_g115.cole$individuals)
+
+
+# combine data
+n <- max(length(asv.cole$richness), length(asv_count_g5.cole$richness),
+         length(asv_count_g50.cole$richness),length(asv_count_g60.cole$richness),
+         length(asv_count_g65.cole$richness),length(asv_count_g72.cole$richness),
+         length(asv_count_g115.cole$richness))
+length(asv.cole$richness) <- n
+length(asv.rarefaction$individuals) <- n
+length(asv_count_g5.cole$richness) <- n
+length(asv_count_g5.rarefaction$individuals) <- n
+length(asv_count_g50.cole$richness) <- n
+length(asv_count_g50.rarefaction$individuals) <- n
+length(asv_count_g60.cole$richness) <- n
+length(asv_count_g60.rarefaction$individuals) <- n
+length(asv_count_g65.cole$richness) <- n
+length(asv_count_g65.rarefaction$individuals) <- n
+length(asv_count_g72.cole$richness) <- n
+length(asv_count_g72.rarefaction$individuals) <- n
+length(asv_count_g115.cole$richness) <- n
+length(asv_count_g115.rarefaction$individuals) <- n
+
+
+asv.combined_gt_bt <- rbind(
+  asv.cole$richness, asv.rarefaction$individuals,
+  asv_count_g5.cole$richness, asv_count_g5.rarefaction$individuals,
+  asv_count_g50.cole$richness, asv_count_g50.rarefaction$individuals,
+  asv_count_g60.cole$richness, asv_count_g60.rarefaction$individuals,
+  asv_count_g65.cole$richness, asv_count_g65.rarefaction$individuals,
+  asv_count_g72.cole$richness, asv_count_g72.rarefaction$individuals,
+  asv_count_g115.cole$richness, asv_count_g115.rarefaction$individuals, deparse.level=2
+  )
+
+```
+
+### fig.1d
+
+```{r warning=FALSE, fig.height=3, fig.width=10}
+asv.combined_gt <- as.data.frame(asv.combined_gt_bt)
+
+asv.combined_gt <- as.data.frame(t(asv.combined_gt))
+
+a2<- 
+  ggplot(asv.combined_gt) +
+  geom_point(aes(x = asv.combined_gt[,4], y = asv.combined_gt[,3]), size = 0.1, colour = "#808080") +
+  geom_point(aes(x = asv.combined_gt[,6], y = asv.combined_gt[,5]), size = 0.1, colour = "#808080") +
+  geom_point(aes(x = asv.combined_gt[,8], y = asv.combined_gt[,7]), size = 0.1, colour = "#808080") +
+  geom_point(aes(x = asv.combined_gt[,10], y = asv.combined_gt[,9]), size = 0.1, colour = "#808080") +
+  geom_point(aes(x = asv.combined_gt[,12], y = asv.combined_gt[,11]), size = 0.1, colour = "#808080") +
+  geom_point(aes(x = asv.combined_gt[,14], y = asv.combined_gt[,13]), size = 0.1, colour = "#808080") +
+  geom_line(aes(x = asv.combined_gt[,6], y = asv.combined_gt[,5], col = "LGT50"), size = 1) +
+  geom_line(aes(x = asv.combined_gt[,8], y = asv.combined_gt[,7], col = "LGT60"), size = 1) +
+  geom_line(aes(x = asv.combined_gt[,14], y = asv.combined_gt[,13], col = "LGT115"), size = 1) +
+  geom_line(aes(x = asv.combined_gt[,4], y = asv.combined_gt[,3], col = "HGT5"), size = 1) +
+  geom_line(aes(x = asv.combined_gt[,10], y = asv.combined_gt[,9], col = "HGT65"), size = 1) +
+  geom_line(aes(x = asv.combined_gt[,12], y = asv.combined_gt[,11], col = "HGT72"), size = 1) +
+  theme_classic()+  #theme(axis.text.x= element_text(angle = 90,hjust=1,vjust=0.5))
+  labs(y = "ASV", x = "Reads") + theme(legend.position = "right") + 
+ scale_color_manual(breaks = c("LGT115","LGT50","LGT60","HGT72", "HGT65","HGT5"), values = c("#9999FF","#3366FF","#0000FF","#FF9966","#FF6633","#FF3300"), name = "Genotype") +
+  scale_x_continuous(breaks=seq(0e6,8e6,2e6), label=scientific)
+```
+
+## fig.1a-d
+
+```{r warning=FALSE}
+# fig.height=5, fig.width=8
+patchwork_fig1 <- (a_2020 / a_2021 | at0 / a2)
+
+patchwork_fig1 <- patchwork_fig1 + 
+  plot_annotation(tag_levels = 'a') & 
+  theme(plot.tag = element_text(size = 14))
+
+ggsave("fig_4_pub_2024_03_16/fig_1ab.tiff",patchwork_fig1,height=120,width=170,units="mm",dpi=300,type="cairo", device=tiff)
+
+```
+
+# Diversity analysis
+
+## Figure 2: Diversity plots
+
+```{r}
+#| echo: false
+
+# with all seasons
+metadata$sampling = as.numeric(as.factor(metadata$event))
+metadata <- metadata %>% 
+  mutate(sampling = case_when(sampling == 1 ~ "June",
+                              sampling == 2 ~ "July",
+                              sampling == 3 ~ "August w1",
+                              sampling == 4 ~ "August w4",
+                              sampling == 5 ~ "June",
+                              sampling == 6 ~ "July",
+                              sampling == 7 ~ "August w4",
+                              TRUE ~ NA_character_))
+alpha.asv_count = fisher.alpha(asv_count)
+shannon.asv_count = diversity(asv_count)
+specnumber.asv_count <- specnumber(asv_count)
+
+## Hill diversities
+otuHill.asv_count = renyi(asv_count, scale=c(0,1,2,3), hill=T)
+hill.0.asv_count = otuHill.asv_count$"0"
+hill.1.asv_count = otuHill.asv_count$"1"
+hill.2.asv_count = otuHill.asv_count$"2"
+hill.3.asv_count = otuHill.asv_count$"3"
+
+## alpha
+N<-50
+```
+
+### fig. 2a
+
+```{r}
+#| echo: false
+### genotype
+d1 <- ggplot(metadata, aes(factor(Genotype,levels =c("GT115", "GT50" , "GT60","GT72", "GT65", "GT5")),alpha.asv_count,fill=Genotype))+
+  geom_boxplot(outlier.size = 0.1)+
+  # facet_grid(.~ year,drop=TRUE,scale="free",space="free_x")+
+  facet_grid(vars(year),vars(factor(sampling, levels = c("June", "July" , "August w1", "August w4"))), scales = "free")+ 
+  scale_fill_manual(breaks = c("GT115", "GT50" , "GT60","GT72", "GT65", "GT5"), values=c("#9999FF","#3366FF","#0000FF","#FF9966","#FF6633","#FF3300"), name = "Genotype")+
+  theme_cowplot()+ylab("Fisher alpha")+
+  # scale_y_continuous(expand = c(0,0))+
+  #theme(panel.margin = unit(0.3, "lines"))+
+  theme(axis.text.x=element_blank(),legend.position = "none", strip.background = element_rect(fill = NA)) + xlab("")
+
+d1
+```
+
+### fig. 2b
+
+```{r}
+#| echo: false
+
+## shannon
+d2 <- ggplot(metadata, aes(factor(Genotype,levels = c("GT115", "GT50" , "GT60","GT72", "GT65", "GT5")),shannon.asv_count,fill=Genotype))+
+  geom_boxplot(outlier.size = 0.1)+
+   facet_grid(rows=vars(year), cols= vars(factor(sampling, levels = c("June", "July" , "August w1", "August w4"))), scales = "free")+ 
+  scale_fill_manual(breaks = c("GT115", "GT50" , "GT60","GT72", "GT65", "GT5"), values=c("#9999FF","#3366FF","#0000FF","#FF9966","#FF6633","#FF3300"), name = "Genotype")+
+  theme_cowplot()+ylab("Shannon") +
+  # scale_y_continuous(expand = c(0,0))+
+  #theme(panel.margin = unit(0.3, "lines"))+
+  theme(axis.text.x=element_blank(),legend.position = "bottom", legend.box = "vertical" , legend.direction = "horizontal", strip.background = element_rect(fill = NA)) + xlab("")
+
+d2
+```
+
+## fig.2a-b
+
+```{r warning=FALSE}
+# fig.height=8, fig.width=6
+patchwork_fig2 <- (d1 / d2)
+
+patchwork_fig2 <- patchwork_fig2 + 
+  plot_annotation(tag_levels = 'a') & 
+  theme(plot.tag = element_text(size = 14))
+ggsave("fig_4_pub_2024_03_16/fig_2ab.tiff",patchwork_fig2,height=180,width=170,units="mm",dpi=300,type="cairo", device=tiff)
+
+```
+
+## Stattistical tests
+
+Between samples for Diversity indexes
+
+```{r mlgm, warning=FALSE}
+alpha.asv_count_2020 = fisher.alpha(asv_count_2020)
+shannon.asv_count_2020 = diversity(asv_count_2020)
+specnumber.asv_count_2020 <- specnumber(asv_count_2020)
+
+## Hill diversities
+otuHill.asv_count_2020 = renyi(asv_count_2020, scale=c(0,1,2,3), hill=T)
+hill.0.asv_count_2020 = otuHill.asv_count_2020$"0"
+hill.1.asv_count_2020 = otuHill.asv_count_2020$"1"
+hill.2.asv_count_2020 = otuHill.asv_count_2020$"2"
+hill.3.asv_count_2020 = otuHill.asv_count_2020$"3"
+
+```
+
+### mGLM on GTs
+
+2020
+
+```{r mlgm_2020_gt, warning=FALSE}
+lm.alpha.2020_gt <-manyglm(alpha.asv_count_2020 ~ as.numeric(metadata_2020$genotype))
+summary(lm.alpha.2020_gt)
+aov(lm.alpha.2020_gt)
+
+lm.shannon.2020_gt <-manyglm(shannon.asv_count_2020 ~ as.numeric(metadata_2020$genotype))
+summary(lm.shannon.2020_gt)
+aov(lm.shannon.2020_gt)
+
+lm.hill.1.2020_gt <-manyglm(hill.1.asv_count_2020 ~ as.numeric(metadata_2020$genotype))
+summary(lm.hill.1.2020_gt)
+aov(lm.hill.1.2020_gt)
+
+lm.hill.2.2020_gt <-manyglm(hill.2.asv_count_2020 ~ as.numeric(metadata_2020$genotype))
+summary(lm.hill.2.2020_gt)
+aov(lm.hill.2.2020_gt)
+
+lm.hill.3.2020_gt <-manyglm(hill.3.asv_count_2020 ~ as.numeric(metadata_2020$genotype))
+summary(lm.hill.3.2020_gt)
+aov(lm.hill.3.2020_gt)
+
+dist.2020 <- vegdist(asv_count_2020)
+adonis.2020_gt <- adonis2(dist.2020~metadata_2020$genotype, perm=999)
+adonis.2020_gt
+
+```
+
+2021
+
+```{r mlgm_2021_gt, warning=FALSE}
+alpha.asv_count_2021 = fisher.alpha(asv_count_2021)
+shannon.asv_count_2021 = diversity(asv_count_2021)
+specnumber.asv_count_2021 <- specnumber(asv_count_2021)
+
+## Hill diversities
+otuHill.asv_count_2021 = renyi(asv_count_2021, scale=c(0,1,2,3), hill=T)
+hill.0.asv_count_2021 = otuHill.asv_count_2021$"0"
+hill.1.asv_count_2021 = otuHill.asv_count_2021$"1"
+hill.2.asv_count_2021 = otuHill.asv_count_2021$"2"
+hill.3.asv_count_2021 = otuHill.asv_count_2021$"3"
+
+
+# mGLM
+
+
+lm.alpha.2021_gt <-manyglm(alpha.asv_count_2021 ~ as.numeric(metadata_2021$genotype))
+summary(lm.alpha.2021_gt)
+aov(lm.alpha.2021_gt)
+
+lm.shannon.2021_gt <-manyglm(shannon.asv_count_2021 ~ as.numeric(metadata_2021$genotype))
+summary(lm.shannon.2021_gt)
+aov(lm.shannon.2021_gt)
+
+lm.hill.1.2021_gt <-manyglm(hill.1.asv_count_2021 ~ as.numeric(metadata_2021$genotype))
+summary(lm.hill.1.2021_gt)
+aov(lm.hill.1.2021_gt)
+
+lm.hill.2.2021_gt <-manyglm(hill.2.asv_count_2021 ~ as.numeric(metadata_2021$genotype))
+summary(lm.hill.2.2021_gt)
+aov(lm.hill.2.2021_gt)
+
+lm.hill.3.2021_gt <-manyglm(hill.3.asv_count_2021 ~ as.numeric(metadata_2021$genotype))
+summary(lm.hill.3.2021_gt)
+aov(lm.hill.3.2021_gt)
+
+dist.2021 <- vegdist(asv_count_2021)
+adonis.2021_gt <- adonis2(dist.2021~metadata_2021$genotype, perm=999)
+adonis.2021_gt
+```
+
+### mGLM on Dates
+
+2020
+
+```{r mlgm_2020_date, warning=FALSE}
+lm.alpha.2020_d <-manyglm(alpha.asv_count_2020 ~ as.numeric(as.factor(metadata_2020$date)))
+summary(lm.alpha.2020_d)
+aov(lm.alpha.2020_d)
+
+lm.shannon.2020_d <-manyglm(shannon.asv_count_2020 ~ as.numeric(as.factor(metadata_2020$date)))
+summary(lm.shannon.2020_d)
+aov(lm.shannon.2020_d)
+
+lm.hill.1.2020_d <-manyglm(hill.1.asv_count_2020 ~ as.numeric(as.factor(metadata_2020$date)))
+summary(lm.hill.1.2020_d)
+aov(lm.hill.1.2020_d)
+
+lm.hill.2.2020_d <-manyglm(hill.2.asv_count_2020 ~ as.numeric(as.factor(metadata_2020$date)))
+summary(lm.hill.2.2020_d)
+aov(lm.hill.2.2020_d)
+
+lm.hill.3.2020_d <-manyglm(hill.3.asv_count_2020 ~ as.numeric(as.factor(metadata_2020$date)))
+summary(lm.hill.3.2020_d)
+aov(lm.hill.3.2020_d)
+
+dist.2020 <- vegdist(asv_count_2020)
+adonis.2020_d <- adonis2(dist.2020~metadata_2020$event, perm=999)
+adonis.2020_d
+
+```
+
+2021
+
+```{r mlgm_2021_date, warning=FALSE}
+alpha.asv_count_2021 = fisher.alpha(asv_count_2021)
+shannon.asv_count_2021 = diversity(asv_count_2021)
+specnumber.asv_count_2021 <- specnumber(asv_count_2021)
+
+## Hill diversities
+otuHill.asv_count_2021 = renyi(asv_count_2021, scale=c(0,1,2,3), hill=T)
+hill.0.asv_count_2021 = otuHill.asv_count_2021$"0"
+hill.1.asv_count_2021 = otuHill.asv_count_2021$"1"
+hill.2.asv_count_2021 = otuHill.asv_count_2021$"2"
+hill.3.asv_count_2021 = otuHill.asv_count_2021$"3"
+
+
+# mGLM
+
+
+lm.alpha.2021_d <-manyglm(alpha.asv_count_2021 ~ as.numeric(as.factor(metadata_2021$date)))
+summary(lm.alpha.2021_d)
+aov(lm.alpha.2021_d)
+
+lm.shannon.2021_d <-manyglm(shannon.asv_count_2021 ~ as.numeric(as.factor(metadata_2021$date)))
+summary(lm.shannon.2021_d)
+aov(lm.shannon.2021_d)
+
+lm.hill.1.2021_d <-manyglm(hill.1.asv_count_2021 ~ as.numeric(as.factor(metadata_2021$date)))
+summary(lm.hill.1.2021_d)
+aov(lm.hill.1.2021_d)
+
+lm.hill.2.2021_d <-manyglm(hill.2.asv_count_2021 ~ as.numeric(as.factor(metadata_2021$date)))
+summary(lm.hill.2.2021_d)
+aov(lm.hill.2.2021_d)
+
+lm.hill.3.2021_d <-manyglm(hill.3.asv_count_2021 ~ as.numeric(as.factor(metadata_2021$date)))
+summary(lm.hill.3.2021_d)
+aov(lm.hill.3.2021_d)
+
+dist.2021 <- vegdist(asv_count_2021)
+adonis.2021_d <- adonis2(dist.2021~metadata_2021$date, perm=999)
+adonis.2021_d
+```
+
+### mGLM on Treatments
+
+2020 mglm
+
+```{r mglm_2020_treatment, warning=FALSE}
+lm.alpha.2020_t <-manyglm(alpha.asv_count_2020 ~ as.numeric(metadata_2020$treatment))
+summary(lm.alpha.2020_t)
+aov(lm.alpha.2020_t)
+
+lm.shannon.2020_t <-manyglm(shannon.asv_count_2020 ~ as.numeric(metadata_2020$treatment))
+summary(lm.shannon.2020_t)
+aov(lm.shannon.2020_t)
+
+lm.hill.1.2020_t <-manyglm(hill.1.asv_count_2020 ~ as.numeric(metadata_2020$treatment))
+summary(lm.hill.1.2020_t)
+aov(lm.hill.1.2020_t)
+
+lm.hill.2.2020_t <-manyglm(hill.2.asv_count_2020 ~ as.numeric(metadata_2020$treatment))
+summary(lm.hill.2.2020_t)
+aov(lm.hill.2.2020_t)
+
+lm.hill.3.2020_t <-manyglm(hill.3.asv_count_2020 ~ as.numeric(metadata_2020$treatment))
+summary(lm.hill.3.2020_t)
+aov(lm.hill.3.2020_t)
+
+dist.2020 <- vegdist(asv_count_2020)
+adonis.2020_t <- adonis2(dist.2020~metadata_2020$Treatment, perm=999)
+adonis.2020_t
+```
+
+#### investigate treatment
+
+vegdist
+
+```{r why treatment effect 2}
+set.seed(1)
+
+# check if rownames are equal 
+all(row.names(asv_count_2020) == rownames(metadata_2020))
+
+# year 2020
+dist.2020 <- vegdist(asv_count_2020)
+adonis.2020_t <- adonis2(dist.2020~metadata_2020$Treatment, perm=9999)
+adonis.2020_t
+
+# date
+dist.22_06_2020 <- vegdist(asv_count_22_06_2020)
+adonis.22_06_2020_t <- adonis2(dist.22_06_2020~meta_date_22_06_2020$Treatment, perm=9999)
+adonis.22_06_2020_t
+
+dist.14_07_2020 <- vegdist(asv_count_14_07_2020)
+adonis.14_07_2020_t <- adonis2(dist.14_07_2020~meta_date_14_07_2020$Treatment, perm=9999)
+adonis.14_07_2020_t
+
+dist.06_08_2020 <- vegdist(asv_count_06_08_2020)
+adonis.06_08_2020_t <- adonis2(dist.06_08_2020~meta_date_06_08_2020$Treatment, perm=9999)
+adonis.06_08_2020_t
+
+dist.23_08_2020 <- vegdist(asv_count_23_08_2020)
+adonis.23_08_2020_t <- adonis2(dist.23_08_2020~meta_date_23_08_2020$Treatment, perm=9999)
+adonis.23_08_2020_t
+
+```
+
+##### standerdization during vegdist
+
+altGower
+
+```{r}
+set.seed(1)
+
+# check if rownames are equal 
+all(row.names(asv_count_2020) == rownames(metadata_2020))
+all(row.names(asv_count) == rownames(metadata))
+all(row.names(asv_count_2021) == rownames(metadata_2021))
+
+# year 2020
+dist.2020 <- vegdist(decostand(asv_count_2020,"range"), "altGower")
+adonis.2020_t <- adonis2(dist.2020~metadata_2020$Treatment, perm=9999)
+adonis.2020_t
+
+# date
+dist.22_06_2020 <- vegdist(decostand(asv_count_22_06_2020,"range"), "altGower")
+adonis.22_06_2020_t <- adonis2(dist.22_06_2020~meta_date_22_06_2020$Treatment, perm=9999)
+adonis.22_06_2020_t
+
+dist.14_07_2020 <- vegdist(decostand(asv_count_14_07_2020,"range"), "altGower")
+adonis.14_07_2020_t <- adonis2(dist.14_07_2020~meta_date_14_07_2020$Treatment, perm=9999)
+adonis.14_07_2020_t
+
+dist.06_08_2020 <- vegdist(decostand(asv_count_06_08_2020,"range"), "altGower")
+adonis.06_08_2020_t <- adonis2(dist.06_08_2020~meta_date_06_08_2020$Treatment, perm=9999)
+adonis.06_08_2020_t
+
+dist.23_08_2020 <- vegdist(decostand(asv_count_23_08_2020,"range"), "altGower")
+adonis.23_08_2020_t <- adonis2(dist.23_08_2020~meta_date_23_08_2020$Treatment, perm=9999)
+adonis.23_08_2020_t
+
+```
+
+##### sta. and all factor effect
+
+```{r}
+# season
+dist.all <- vegdist(decostand(asv_count,"range"), "altGower")
+adonis.all_s <- adonis2(dist.all ~ date, data = metadata, perm=9999)
+adonis.all_s
+
+# year 2020
+dist.2020 <- vegdist(decostand(asv_count_2020,"range"), "altGower")
+adonis.2020_s <- adonis2(dist.2020 ~ event, data = metadata_2020, perm=9999)
+adonis.2020_s
+
+dist.2021 <- vegdist(decostand(asv_count_2021,"range"), "altGower")
+adonis.2021_s <- adonis2(dist.2021 ~ event, data = metadata_2021, perm=9999)
+adonis.2021_s
+
+# treatm,ent
+adonis.2020_t <- adonis2(dist.2020 ~ Treatment, data = metadata_2020, perm=9999)
+adonis.2020_t
+
+# genotype
+adonis.2020_g <- adonis2(dist.2020 ~ Genotype, data = metadata_2020, perm=9999)
+adonis.2020_g
+
+adonis.2021_g <- adonis2(dist.2021 ~ Genotype, data = metadata_2021, perm=9999)
+adonis.2021_g
+
+# tanin_status
+adonis.2020_ts <- adonis2(dist.2020 ~ tan_status, data = metadata_2020, perm=9999)
+adonis.2020_ts
+
+adonis.2021_ts <- adonis2(dist.2021 ~ tan_status, data = metadata_2021, perm=9999)
+adonis.2021_ts
+
+
+
+# all factors in one
+
+adonis.2020_all_f <- adonis2(dist.2020 ~ date+Treatment+Genotype, data = metadata_2020, perm=9999)
+adonis.2020_all_f
+
+adonis.2021_all_f <- adonis2(dist.2021 ~ date+Genotype, data = metadata_2021, perm=9999)
+adonis.2021_all_f
+
+```
+
+##### Lets visualize all kinds of treatments
+
+to see the treatment effect
+
+```{r why treatment effect is strong, fig.width=10}
+# subset 2020
+reads_sum_metadata_no_whole_outlier_2020 <- subset(reads_sum_metadata_no_whole_outlier, reads_sum_metadata_no_whole_outlier$year=="2020")
+
+
+ggplot(reads_sum_metadata_no_whole_outlier_2020, aes(x= factor(Treatment), y=`rowSums(asv_count)`,fill= Treatment)) +
+  geom_boxplot(outlier.size = 0.1) + theme_bw() +
+  labs(x ="Treatments", y = "Reads")
+
+ggplot(reads_sum_metadata_no_whole_outlier_2020, aes(x= factor(Treatment), y=`rowSums(asv_count)`,fill= Treatment)) +
+   geom_boxplot(outlier.size = 0.1) + theme_bw() +
+   labs(x ="Treatments", y = "Reads") + facet_grid(vars(date), vars(Genotype))
+ 
+ggplot(reads_sum_metadata_no_whole_outlier_2020, aes(x= date, y=`rowSums(asv_count)`,fill= Treatment)) +
+   geom_boxplot(outlier.size = 0.1) + theme_bw() +
+   labs(x ="Treatments", y = "Reads") + facet_grid(vars(date), vars(Genotype))
+ 
+ggplot(reads_sum_metadata_no_whole_outlier, aes(x= Treatment, y=`rowSums(asv_count)`,fill= Treatment)) +
+   geom_boxplot(outlier.size = 0.1) + theme_bw() +
+   labs(x ="Treatments", y = "Reads") + facet_grid(vars(date), vars(Genotype))
+ 
+ggplot(reads_sum_metadata_no_whole_outlier, aes(x= Treatment, y=`rowSums(asv_count)`,fill= Treatment)) +
+   geom_boxplot(outlier.size = 0.1) + theme_bw() +
+   labs(x ="Treatments", y = "Reads") + facet_grid(vars(date), vars(Genotype))
+ 
+ggplot(reads_sum_metadata_no_whole_outlier, aes(x= date, y=`rowSums(asv_count)`)) +
+   geom_boxplot(outlier.size = 0.1) + theme_bw() +
+   labs(x ="Date", y = "Reads")
+ 
+ggplot(reads_sum_metadata_no_whole_outlier, aes(x= date, y=`rowSums(asv_count)`, fill = Treatment)) +
+   geom_boxplot(outlier.size = 0.1) + theme_bw() +
+   labs(x ="Date", y = "Reads")
+ 
+
+ggplot(reads_sum_metadata_no_whole_outlier, aes(x= date, y=`rowSums(asv_count)`, fill = Genotype)) +
+   geom_boxplot(outlier.size = 0.1) + theme_bw() +
+   labs(x ="Date", y = "Reads")
+ 
+ggplot(reads_sum_metadata_no_whole_outlier, aes(x= date, y=`rowSums(asv_count)`, fill = date)) +
+   geom_boxplot(outlier.size = 0.1) + theme_bw() +
+   labs(x ="Date", y = "Reads")
+
+
+
+ggplot(reads_sum_metadata_no_whole_outlier, aes(factor(date, levels = c("22-06-2020", "23-06-2021","14-07-2020","14-07-2021", "06-08-2020", "23-08-2020","24-08-2021")), y=`rowSums(asv_count)`)) +
+   geom_boxplot(outlier.size = 0.1) + theme_bw() +
+   labs(x ="Date", y = "Reads")+
+  scale_x_discrete(breaks=c("22-06-2020", "23-06-2021","14-07-2020","14-07-2021", "06-08-2020", "23-08-2020","24-08-2021"),labels=c("06-2020", "06-2021","07-2020","07-2021", "08(06)-2020", "08(23)-2020","08-2021")) 
+ 
+
+ggplot(reads_sum_metadata_no_whole_outlier, aes(factor(date, levels = c("22-06-2020", "23-06-2021","14-07-2020","14-07-2021", "06-08-2020", "23-08-2020","24-08-2021")), y=`rowSums(asv_count)`, fill = Genotype)) +
+   geom_boxplot(outlier.size = 0.1) + theme_bw() +
+   labs(x ="Date", y = "Reads")+
+  scale_x_discrete(breaks=c("22-06-2020", "23-06-2021","14-07-2020","14-07-2021", "06-08-2020", "23-08-2020","24-08-2021"),labels=c("06-2020", "06-2021","07-2020","07-2021", "08(06)-2020", "08(23)-2020","08-2021")) 
+
+ggplot(reads_sum_metadata_no_whole_outlier, aes(factor(date, levels = c("22-06-2020", "23-06-2021","14-07-2020","14-07-2021", "06-08-2020", "23-08-2020","24-08-2021")), y=`rowSums(asv_count)`, fill = Treatment)) +
+   geom_boxplot(outlier.size = 0.1) + theme_bw() +
+   labs(x ="Date", y = "Reads")+
+  scale_x_discrete(breaks=c("22-06-2020", "23-06-2021","14-07-2020","14-07-2021", "06-08-2020", "23-08-2020","24-08-2021"),labels=c("06-2020", "06-2021","07-2020","07-2021", "08(06)-2020", "08(23)-2020","08-2021")) 
+
+
+ggplot(reads_sum_metadata_no_whole_outlier, aes(factor(date, levels = c("22-06-2020", "23-06-2021","14-07-2020","14-07-2021", "06-08-2020", "23-08-2020","24-08-2021")), y=`rowSums(asv_count)`, fill = Treatment)) +
+   geom_boxplot(outlier.size = 0.1) + theme_bw() +
+   labs(x ="Date", y = "Reads")+
+  scale_x_discrete(breaks=c("22-06-2020", "23-06-2021","14-07-2020","14-07-2021", "06-08-2020", "23-08-2020","24-08-2021"),labels=c("06-2020", "06-2021","07-2020","07-2021", "08(06)-2020", "08(23)-2020","08-2021")) + facet_grid(vars(date), vars(Genotype)) 
+
+```
+
+in all data (both years, all dates, all GTs and all treatments combined)
+
+```{r}
+reads_sum_metadata_no_whole_outlier %>%
+ggplot( aes(x=date, y=`rowSums(asv_count)`, fill=Treatment)) +
+    geom_violin() +
+    scale_x_discrete(breaks=c("22-06-2020", "23-06-2021","14-07-2020","14-07-2021", "06-08-2020", "23-08-2020","24-08-2021"),labels=c("06-2020", "06-2021","07-2020","07-2021", "08(06)-2020", "08(23)-2020","08-2021")) +
+    geom_jitter(color="black", size=0.4, alpha=0.9) +
+    theme_bw() +
+    theme(
+      legend.position="top",
+      plot.title = element_text(size=11)
+    ) +
+    ggtitle("A boxplot with jitter") +
+    xlab("")
+```
+
+in year 2020 only
+
+```{r}
+ggplot(reads_sum_metadata_no_whole_outlier_2020, aes(factor(date, levels = c("22-06-2020", "23-06-2021","14-07-2020","14-07-2021", "06-08-2020", "23-08-2020","24-08-2021")), y=`rowSums(asv_count)`, fill = Genotype)) +
+   geom_violin(outlier.size = 0.1) + theme_bw() +
+   labs(x ="Date", y = "Reads")+
+  scale_x_discrete(breaks=c("22-06-2020", "23-06-2021","14-07-2020","14-07-2021", "06-08-2020", "23-08-2020","24-08-2021"),labels=c("06-2020", "06-2021","07-2020","07-2021", "08(06)-2020", "08(23)-2020","08-2021")) + geom_jitter(color="black", size=0.4, alpha=0.9)
+    
+
+ggplot(reads_sum_metadata_no_whole_outlier_2020, aes(factor(date, levels = c("22-06-2020", "23-06-2021","14-07-2020","14-07-2021", "06-08-2020", "23-08-2020","24-08-2021")), y=`rowSums(asv_count)`, fill = Treatment)) + geom_boxplot(outlier.size = 0.2) + theme_bw() +
+   labs(x ="Date", y = "Reads")+
+  scale_x_discrete(breaks=c("22-06-2020", "23-06-2021","14-07-2020","14-07-2021", "06-08-2020", "23-08-2020","24-08-2021"),labels=c("06-2020", "06-2021","07-2020","07-2021", "08(06)-2020", "08(23)-2020","08-2021"))+ geom_jitter(color="black", size=0.4, alpha=0.9)
+
+```
+
+in year 2021 only
+
+```{r mlgm_2021_treatment, warning=FALSE}
+alpha.asv_count_2021 = fisher.alpha(asv_count_2021)
+shannon.asv_count_2021 = diversity(asv_count_2021)
+specnumber.asv_count_2021 <- specnumber(asv_count_2021)
+
+## Hill diversities
+otuHill.asv_count_2021 = renyi(asv_count_2021, scale=c(0,1,2,3), hill=T)
+hill.0.asv_count_2021 = otuHill.asv_count_2021$"0"
+hill.1.asv_count_2021 = otuHill.asv_count_2021$"1"
+hill.2.asv_count_2021 = otuHill.asv_count_2021$"2"
+hill.3.asv_count_2021 = otuHill.asv_count_2021$"3"
+
+
+# mGLM
+
+
+lm.alpha.2021_t <-manyglm(alpha.asv_count_2021 ~ as.numeric(metadata_2021$treatment))
+summary(lm.alpha.2021_t)
+aov(lm.alpha.2021_t)
+
+lm.shannon.2021_t <-manyglm(shannon.asv_count_2021 ~ as.numeric(metadata_2021$treatment))
+summary(lm.shannon.2021_t)
+aov(lm.shannon.2021_t)
+
+lm.hill.1.2021_t <-manyglm(hill.1.asv_count_2021 ~ as.numeric(metadata_2021$treatment))
+summary(lm.hill.1.2021_t)
+aov(lm.hill.1.2021_t)
+
+lm.hill.2.2021_t <-manyglm(hill.2.asv_count_2021 ~ as.numeric(metadata_2021$treatment))
+summary(lm.hill.2.2021_t)
+aov(lm.hill.2.2021_t)
+
+lm.hill.3.2021_t <-manyglm(hill.3.asv_count_2021 ~ as.numeric(metadata_2021$treatment))
+summary(lm.hill.3.2021_t)
+aov(lm.hill.3.2021_t)
+
+dist.2021 <- vegdist(asv_count_2021)
+adonis.2021_t <- adonis2(dist.2021~metadata_2021$treatment, perm=999)
+adonis.2021_t
+
+
+```
+
+PERMANOVA detailed on treatment and date
+
+```{r}
+dist.2020 <- vegdist(asv_count_2020)
+adonis.2020_t <- adonis2(dist.2020~metadata_2020$treatment, perm=999)
+adonis.2020_t
+
+
+# year 2020
+dist.2020 <- vegdist(asv_count_2020)
+adonis.2020_t <- adonis2(dist.2020~metadata_2020$Treatment, perm=9999)
+adonis.2020_t
+
+# date
+dist.22_06_2020 <- vegdist(asv_count_22_06_2020)
+adonis.22_06_2020_t <- adonis2(dist.22_06_2020~meta_date_22_06_2020$Treatment, perm=9999)
+adonis.22_06_2020_t
+
+# some tests
+meta_date_22_06_2020$treatment[meta_date_22_06_2020$treatment == "0"] <- '1'
+dist.22_06_2020 <- vegdist(asv_count_22_06_2020)
+adonis.22_06_2020_t <- adonis2(dist.22_06_2020 ~ Treatment ,data =  meta_date_22_06_2020, perm=9999, by = "terms")
+adonis.22_06_2020_t
+
+dist.14_07_2020 <- vegdist(asv_count_14_07_2020)
+adonis.14_07_2020_t <- adonis2(dist.14_07_2020~meta_date_14_07_2020$Treatment, perm=9999)
+adonis.14_07_2020_t <- adonis2(dist.14_07_2020~meta_date_14_07_2020$Treatment, perm=9999)
+adonis.14_07_2020_t
+
+dist.06_08_2020 <- vegdist(asv_count_06_08_2020)
+adonis.06_08_2020_t <- adonis2(dist.06_08_2020~meta_date_06_08_2020$Treatment, perm=9999)
+adonis.06_08_2020_t <- adonis2(dist.06_08_2020~meta_date_06_08_2020$Treatment, perm=9999)
+adonis.06_08_2020_t
+
+dist.23_08_2020 <- vegdist(asv_count_23_08_2020)
+adonis.23_08_2020_t <- adonis2(dist.23_08_2020~meta_date_23_08_2020$Treatment, perm=9999)
+adonis.23_08_2020_t <- adonis2(dist.23_08_2020~meta_date_23_08_2020$Treatment, perm=9999)
+adonis.23_08_2020_t
+
+```
+
+##### treatments 't' permanova test
+
+```{r}
+metadata_2020$treatment[metadata_2020$treatment == "0"] <- '1'
+
+dist.2020_d <- vegdist(asv_count_2020)
+adonis.2020_d <- adonis2(dist.2020_d~ treatment, data = metadata_2020, perm=9999, by = "terms")
+
+
+dist.2020_r <- vegdist(decostand(asv_count_2020,"range"), "altGower")
+adonis.2020_r <- adonis2(dist.2020_r~ treatment, data = metadata_2020, perm=9999, by = "terms")
+
+dist.2020_br <- vegdist(decostand(asv_count_2020,"range"), "bray")
+adonis.2020_br <- adonis2(dist.2020_br~ treatment, data = metadata_2020, perm=9999, by = "terms")
+
+
+dist.2020_z <- betadiver(asv_count_2020, "z")
+adonis.2020_z <- adonis2(dist.2020_z~ treatment, data = metadata_2020, perm=9999, by = "terms")
+```
+
+```{r}
+adonis.2020_d
+adonis.2020_r
+adonis.2020_br
+adonis.2020_z
+```
+
+## TUKEY tests
+
+All data (all events, gts, treatments) Tukey on Fisher alpha and shannon index (combined)
+
+```{r}
+all(rownames(metadata) == rownames(alpha.asv_count))
+
+# What is the effect of the genotype on the alpha ?
+
+model_alpha = lm(alpha.asv_count~metadata$Genotype)
+ANOVA_alpha=aov(model_alpha)
+
+# Tukey test to study each pair of treatment :
+tukey_alpha <- TukeyHSD(x=ANOVA_alpha, 'metadata$Genotype', conf.level=0.95)
+tukey_alpha
+
+
+tukey_alpha_df <- as.data.frame(tukey_alpha$`metadata$Genotype`)
+tukey_alpha_df$significant <- ifelse(tukey_alpha_df$`p adj` < 0.05, "Significant", "Not Significant")
+
+# substituting the GT from row names
+row.names(tukey_alpha_df) <- gsub("GT","",as.character(row.names(tukey_alpha_df)))
+tukey_alpha_df
+
+# Plotting
+tu1 <- ggplot(tukey_alpha_df, aes(x = row.names(tukey_alpha_df), y = diff, ymin = lwr, ymax = upr, color = significant)) +
+  geom_point(stat = "identity", position = position_dodge(width = 0.8)) +
+  geom_errorbar(stat = "identity", position = position_dodge(width = 0.8), width = 0.25, size = 1) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray") +
+  labs(x = "", y = "") +  
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1,vjust=0.5, size = 6),axis.text.y = element_text(size = 6)) +
+  coord_flip()+
+  theme(legend.position = "none") +
+  scale_color_manual(values = c(black.transp, brown.transp))
+
+tu1
+
+
+## Tukey on shannon index
+all(rownames(metadata) == rownames(shannon.asv_count))
+
+# What is the effect of the genotype on the shannon ?
+
+model_shannon = lm(shannon.asv_count~metadata$Genotype)
+ANOVA_shannon=aov(model_shannon)
+
+# Tukey test to study each pair of treatment :
+tukey_shannon <- TukeyHSD(x=ANOVA_shannon, 'metadata$Genotype', conf.level=0.95)
+tukey_shannon
+
+
+tukey_shannon_df <- as.data.frame(tukey_shannon$`metadata$Genotype`)
+tukey_shannon_df$significant <- ifelse(tukey_shannon_df$`p adj` < 0.05, "Significant", "Not Significant")
+
+# substituting the GT from row names
+row.names(tukey_shannon_df) <- gsub("GT","",as.character(row.names(tukey_shannon_df)))
+tukey_shannon_df
+
+# Plotting
+tu2 <- ggplot(tukey_shannon_df, aes(x = row.names(tukey_shannon_df), y = diff, ymin = lwr, ymax = upr, color = significant)) +
+  geom_point(stat = "identity", position = position_dodge(width = 0.8)) +
+  geom_errorbar(stat = "identity", position = position_dodge(width = 0.8), width = 0.25, size = 1) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray") +
+  labs(x = "", y = "") +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle =90, hjust = 1,vjust=0.5, size = 6),axis.text.y = element_text(size = 6)) +
+  coord_flip()+
+  theme(legend.position = "none")+
+  scale_color_manual(values = c(black.transp, brown.transp))
+
+tu2 
+```
+
+## Figure 3: Tukey plots
+
+### fig.3a-b
+
+#### All data (all events, gts, treatments)
+
+Tukey on Fisher alpha and shannon index (combined)
+
+```{r warning=FALSE}
+#| echo: false
+
+# fig.height=3, fig.width=8
+patchwork_fig3 <- (tu1 | tu2)
+
+patchwork_fig3 <- patchwork_fig3 + 
+  plot_annotation(tag_levels = 'a') & 
+  theme(plot.tag = element_text(size = 10))
+patchwork_fig3
+ggsave("fig_4_pub_2024_03_16/fig_3ab.tiff", patchwork_fig3,height=70,width=85,units="mm",dpi=300,type="cairo", device=tiff)
+
+```
+
+#### year 2020
+
+Tukey on Fisher alpha and shannon index,
+
+```{r}
+# What is the effect of the genotype on the indexes?
+## Tukey on Alpha
+
+all(rownames(metadata_2020) == rownames(alpha.asv_count_2020))
+
+
+model_alpha = lm(alpha.asv_count_2020~metadata_2020$Genotype)
+ANOVA_alpha=aov(model_alpha)
+
+# Tukey test to study each pair of treatment :
+tukey_alpha <- TukeyHSD(x=ANOVA_alpha, 'metadata_2020$Genotype', conf.level=0.95)
+tukey_alpha
+
+
+tukey_alpha_df <- as.data.frame(tukey_alpha$`metadata_2020$Genotype`)
+tukey_alpha_df$significant <- ifelse(tukey_alpha_df$`p adj` < 0.05, "Significant", "Not Significant")
+
+# substituting the GT from row names
+row.names(tukey_alpha_df) <- gsub("GT","",as.character(row.names(tukey_alpha_df)))
+
+# Plotting
+tu_2020_alpha <- ggplot(tukey_alpha_df, aes(x = row.names(tukey_alpha_df), y = diff, ymin = lwr, ymax = upr, color = significant)) +
+  geom_point(stat = "identity", position = position_dodge(width = 0.8)) +
+  geom_errorbar(stat = "identity", position = position_dodge(width = 0.8), width = 0.25, size = 1) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray") +
+  labs(x = "", y = "") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme_classic() +
+  coord_flip()+
+  theme(legend.position = "none") +
+  scale_color_manual(values = c(black.transp, brown.transp))
+
+tu_2020_alpha
+
+
+## Tukey on shannon index
+all(rownames(metadata_2020) == rownames(shannon.asv_count_2020))
+
+# What is the effect of the genotype on the shannon ?
+
+model_shannon = lm(shannon.asv_count_2020~metadata_2020$Genotype)
+ANOVA_shannon=aov(model_shannon)
+
+# Tukey test to study each pair of treatment :
+tukey_shannon <- TukeyHSD(x=ANOVA_shannon, 'metadata_2020$Genotype', conf.level=0.95)
+tukey_shannon
+
+
+tukey_shannon_df <- as.data.frame(tukey_shannon$`metadata_2020$Genotype`)
+tukey_shannon_df$significant <- ifelse(tukey_shannon_df$`p adj` < 0.05, "Significant", "Not Significant")
+
+# substituting the GT from row names
+row.names(tukey_shannon_df) <- gsub("GT","",as.character(row.names(tukey_shannon_df)))
+
+
+# Plotting
+tu_2020_shannon <- ggplot(tukey_shannon_df, aes(x = row.names(tukey_shannon_df), y = diff, ymin = lwr, ymax = upr, color = significant)) +
+  geom_point(stat = "identity", position = position_dodge(width = 0.8)) +
+  geom_errorbar(stat = "identity", position = position_dodge(width = 0.8), width = 0.25, size = 1) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray") +
+  labs(x = "", y = "") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme_classic() +
+  coord_flip()+
+  theme(legend.position = "none")+
+  scale_color_manual(values = c(black.transp, brown.transp))
+
+tu_2020_shannon
+```
+
+#### year 2021
+
+Tukey on Fisher alpha and shannon index,
+
+```{r}
+# What is the effect of the genotype on the indexes?
+## Tukey on Alpha
+
+all(rownames(metadata_2021) == rownames(alpha.asv_count_2021))
+
+
+model_alpha = lm(alpha.asv_count_2021~metadata_2021$Genotype)
+ANOVA_alpha=aov(model_alpha)
+
+# Tukey test to study each pair of treatment :
+tukey_alpha <- TukeyHSD(x=ANOVA_alpha, 'metadata_2021$Genotype', conf.level=0.95)
+tukey_alpha
+
+
+tukey_alpha_df <- as.data.frame(tukey_alpha$`metadata_2021$Genotype`)
+tukey_alpha_df$significant <- ifelse(tukey_alpha_df$`p adj` < 0.05, "Significant", "Not Significant")
+
+# substituting the GT from row names
+row.names(tukey_alpha_df) <- gsub("GT","",as.character(row.names(tukey_alpha_df)))
+
+# Plotting
+tu_2021_alpha <- ggplot(tukey_alpha_df, aes(x = row.names(tukey_alpha_df), y = diff, ymin = lwr, ymax = upr, color = significant)) +
+  geom_point(stat = "identity", position = position_dodge(width = 0.8)) +
+  geom_errorbar(stat = "identity", position = position_dodge(width = 0.8), width = 0.25, size = 1) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray") +
+  labs(x = "", y = "") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme_classic() +
+  coord_flip()+
+  theme(legend.position = "none") +
+  scale_color_manual(values = c(black.transp, brown.transp))
+
+tu_2021_alpha
+
+
+## Tukey on shannon index
+all(rownames(metadata_2021) == rownames(shannon.asv_count_2021))
+
+# What is the effect of the genotype on the shannon ?
+
+model_shannon = lm(shannon.asv_count_2021~metadata_2021$Genotype)
+ANOVA_shannon=aov(model_shannon)
+
+# Tukey test to study each pair of treatment :
+tukey_shannon <- TukeyHSD(x=ANOVA_shannon, 'metadata_2021$Genotype', conf.level=0.95)
+tukey_shannon
+
+
+tukey_shannon_df <- as.data.frame(tukey_shannon$`metadata_2021$Genotype`)
+tukey_shannon_df$significant <- ifelse(tukey_shannon_df$`p adj` < 0.05, "Significant", "Not Significant")
+
+# substituting the GT from row names
+row.names(tukey_shannon_df) <- gsub("GT","",as.character(row.names(tukey_shannon_df)))
+
+
+# Plotting
+tu_2021_shannon <- ggplot(tukey_shannon_df, aes(x = row.names(tukey_shannon_df), y = diff, ymin = lwr, ymax = upr, color = significant)) +
+  geom_point(stat = "identity", position = position_dodge(width = 0.8)) +
+  geom_errorbar(stat = "identity", position = position_dodge(width = 0.8), width = 0.25, size = 1) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray") +
+  labs(x = "", y = "") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme_classic() +
+  coord_flip()+
+  theme(legend.position = "none")+
+  scale_color_manual(values = c(black.transp, brown.transp))
+
+tu_2021_shannon
+```
+
+#### 2020 autumn all
+
+Tukey on Fisher alpha and shannon index,
+
+```{r}
+# What is the effect of the genotype on the indexes?
+## Tukey on Alpha
+
+alpha.asv_count_23_08_2020 = fisher.alpha(asv_count_23_08_2020)
+
+
+all(rownames(meta_date_23_08_2020) == rownames(alpha.asv_count_23_08_2020))
+
+
+model_alpha = lm(alpha.asv_count_23_08_2020~meta_date_23_08_2020$Genotype)
+ANOVA_alpha=aov(model_alpha)
+
+# Tukey test to study each pair of treatment :
+tukey_alpha <- TukeyHSD(x=ANOVA_alpha, 'meta_date_23_08_2020$Genotype', conf.level=0.95)
+tukey_alpha
+
+
+tukey_alpha_df <- as.data.frame(tukey_alpha$`meta_date_23_08_2020$Genotype`)
+tukey_alpha_df$significant <- ifelse(tukey_alpha_df$`p adj` < 0.05, "Significant", "Not Significant")
+
+# substituting the GT from row names
+row.names(tukey_alpha_df) <- gsub("GT","",as.character(row.names(tukey_alpha_df)))
+
+# Plotting
+tu_23_08_2020_alpha <- ggplot(tukey_alpha_df, aes(x = row.names(tukey_alpha_df), y = diff, ymin = lwr, ymax = upr, color = significant)) +
+  geom_point(stat = "identity", position = position_dodge(width = 0.8)) +
+  geom_errorbar(stat = "identity", position = position_dodge(width = 0.8), width = 0.25, size = 1) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray") +
+  labs(x = "", y = "") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme_classic() +
+  coord_flip()+
+  theme(legend.position = "none") +
+  scale_color_manual(values = c(black.transp, brown.transp))
+
+tu_23_08_2020_alpha
+
+
+## Tukey on shannon index
+
+shannon.asv_count_23_08_2020 = diversity(asv_count_23_08_2020)
+
+
+all(rownames(meta_date_23_08_2020) == rownames(asv_count_23_08_2020))
+
+# What is the effect of the genotype on the shannon ?
+
+model_shannon = lm(shannon.asv_count_23_08_2020~meta_date_23_08_2020$Genotype)
+ANOVA_shannon=aov(model_shannon)
+
+# Tukey test to study each pair of treatment :
+tukey_shannon <- TukeyHSD(x=ANOVA_shannon, 'meta_date_23_08_2020$Genotype', conf.level=0.95)
+tukey_shannon
+
+
+tukey_shannon_df <- as.data.frame(tukey_shannon$`meta_date_23_08_2020$Genotype`)
+tukey_shannon_df$significant <- ifelse(tukey_shannon_df$`p adj` < 0.05, "Significant", "Not Significant")
+
+# substituting the GT from row names
+row.names(tukey_shannon_df) <- gsub("GT","",as.character(row.names(tukey_shannon_df)))
+
+
+# Plotting
+tu_23_08_2020_shannon <- ggplot(tukey_shannon_df, aes(x = row.names(tukey_shannon_df), y = diff, ymin = lwr, ymax = upr, color = significant)) +
+  geom_point(stat = "identity", position = position_dodge(width = 0.8)) +
+  geom_errorbar(stat = "identity", position = position_dodge(width = 0.8), width = 0.25, size = 1) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray") +
+  labs(x = "", y = "") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme_classic() +
+  coord_flip()+
+  theme(legend.position = "none")+
+  scale_color_manual(values = c(black.transp, brown.transp))
+
+tu_23_08_2020_shannon
+```
+
+#### 2020 autumn control
+
+Tukey on Fisher alpha and shannon index,
+
+```{r}
+# What is the effect of the genotype on the indexes?
+## Tukey on Alpha
+
+alpha.asv_count_23_08_2020_t0 = fisher.alpha(asv_count_23_08_2020_t0)
+
+
+all(rownames(meta_date_23_08_2020_t0) == rownames(alpha.asv_count_23_08_2020_t0))
+
+
+model_alpha = lm(alpha.asv_count_23_08_2020_t0~meta_date_23_08_2020_t0$Genotype)
+ANOVA_alpha=aov(model_alpha)
+
+# Tukey test to study each pair of treatment :
+tukey_alpha <- TukeyHSD(x=ANOVA_alpha, 'meta_date_23_08_2020_t0$Genotype', conf.level=0.95)
+tukey_alpha
+
+
+tukey_alpha_df <- as.data.frame(tukey_alpha$`meta_date_23_08_2020_t0$Genotype`)
+tukey_alpha_df$significant <- ifelse(tukey_alpha_df$`p adj` < 0.05, "Significant", "Not Significant")
+
+# substituting the GT from row names
+row.names(tukey_alpha_df) <- gsub("GT","",as.character(row.names(tukey_alpha_df)))
+
+# Plotting
+tu_23_08_2020_t0_alpha <- ggplot(tukey_alpha_df, aes(x = row.names(tukey_alpha_df), y = diff, ymin = lwr, ymax = upr, color = significant)) +
+  geom_point(stat = "identity", position = position_dodge(width = 0.8)) +
+  geom_errorbar(stat = "identity", position = position_dodge(width = 0.8), width = 0.25, size = 1) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray") +
+  labs(x = "", y = "") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme_classic() +
+  coord_flip()+
+  theme(legend.position = "none") +
+  scale_color_manual(values = c(black.transp, brown.transp))
+
+tu_23_08_2020_t0_alpha
+
+
+## Tukey on shannon index
+
+shannon.asv_count_23_08_2020_t0 = diversity(asv_count_23_08_2020_t0)
+
+
+all(rownames(meta_date_23_08_2020_t0) == rownames(asv_count_23_08_2020_t0))
+
+# What is the effect of the genotype on the shannon ?
+
+model_shannon = lm(shannon.asv_count_23_08_2020_t0~meta_date_23_08_2020_t0$Genotype)
+ANOVA_shannon=aov(model_shannon)
+
+# Tukey test to study each pair of treatment :
+tukey_shannon <- TukeyHSD(x=ANOVA_shannon, 'meta_date_23_08_2020_t0$Genotype', conf.level=0.95)
+tukey_shannon
+
+
+tukey_shannon_df <- as.data.frame(tukey_shannon$`meta_date_23_08_2020_t0$Genotype`)
+tukey_shannon_df$significant <- ifelse(tukey_shannon_df$`p adj` < 0.05, "Significant", "Not Significant")
+
+# substituting the GT from row names
+row.names(tukey_shannon_df) <- gsub("GT","",as.character(row.names(tukey_shannon_df)))
+
+
+# Plotting
+tu_23_08_2020_t0_shannon <- ggplot(tukey_shannon_df, aes(x = row.names(tukey_shannon_df), y = diff, ymin = lwr, ymax = upr, color = significant)) +
+  geom_point(stat = "identity", position = position_dodge(width = 0.8)) +
+  geom_errorbar(stat = "identity", position = position_dodge(width = 0.8), width = 0.25, size = 1) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray") +
+  labs(x = "", y = "") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme_classic() +
+  coord_flip()+
+  theme(legend.position = "none")+
+  scale_color_manual(values = c(black.transp, brown.transp))
+
+tu_23_08_2020_t0_shannon
+```
+
+#### 2021 autumn control
+
+Tukey on Fisher alpha and shannon index,
+
+```{r}
+# What is the effect of the genotype on the indexes?
+## Tukey on Alpha
+
+alpha.asv_count_24_08_2021_t0 = fisher.alpha(asv_count_24_08_2021_t0)
+
+
+all(rownames(meta_date_24_08_2021_t0) == rownames(alpha.asv_count_24_08_2021_t0))
+
+
+model_alpha = lm(alpha.asv_count_24_08_2021_t0~meta_date_24_08_2021_t0$Genotype)
+ANOVA_alpha=aov(model_alpha)
+
+# Tukey test to study each pair of treatment :
+tukey_alpha <- TukeyHSD(x=ANOVA_alpha, 'meta_date_24_08_2021_t0$Genotype', conf.level=0.95)
+tukey_alpha
+
+
+tukey_alpha_df <- as.data.frame(tukey_alpha$`meta_date_24_08_2021_t0$Genotype`)
+tukey_alpha_df$significant <- ifelse(tukey_alpha_df$`p adj` < 0.05, "Significant", "Not Significant")
+
+# substituting the GT from row names
+row.names(tukey_alpha_df) <- gsub("GT","",as.character(row.names(tukey_alpha_df)))
+
+# Plotting
+tu_24_08_2021_alpha <- ggplot(tukey_alpha_df, aes(x = row.names(tukey_alpha_df), y = diff, ymin = lwr, ymax = upr, color = significant)) +
+  geom_point(stat = "identity", position = position_dodge(width = 0.8)) +
+  geom_errorbar(stat = "identity", position = position_dodge(width = 0.8), width = 0.25, size = 1) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray") +
+  labs(x = "", y = "") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme_classic() +
+  coord_flip()+
+  theme(legend.position = "none") +
+  scale_color_manual(values = c(black.transp, brown.transp))
+
+tu_24_08_2021_alpha
+
+
+## Tukey on shannon index
+
+shannon.asv_count_24_08_2021_t0 = diversity(asv_count_24_08_2021_t0)
+
+
+all(rownames(meta_date_24_08_2021_t0) == rownames(asv_count_24_08_2021_t0))
+
+# What is the effect of the genotype on the shannon ?
+
+model_shannon = lm(shannon.asv_count_24_08_2021_t0~meta_date_24_08_2021_t0$Genotype)
+ANOVA_shannon=aov(model_shannon)
+
+# Tukey test to study each pair of treatment :
+tukey_shannon <- TukeyHSD(x=ANOVA_shannon, 'meta_date_24_08_2021_t0$Genotype', conf.level=0.95)
+tukey_shannon
+
+
+tukey_shannon_df <- as.data.frame(tukey_shannon$`meta_date_24_08_2021_t0$Genotype`)
+tukey_shannon_df$significant <- ifelse(tukey_shannon_df$`p adj` < 0.05, "Significant", "Not Significant")
+
+# substituting the GT from row names
+row.names(tukey_shannon_df) <- gsub("GT","",as.character(row.names(tukey_shannon_df)))
+
+
+# Plotting
+tu_24_08_2021_shannon <- ggplot(tukey_shannon_df, aes(x = row.names(tukey_shannon_df), y = diff, ymin = lwr, ymax = upr, color = significant)) +
+  geom_point(stat = "identity", position = position_dodge(width = 0.8)) +
+  geom_errorbar(stat = "identity", position = position_dodge(width = 0.8), width = 0.25, size = 1) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray") +
+  labs(x = "", y = "") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme_classic() +
+  coord_flip()+
+  theme(legend.position = "none")+
+  scale_color_manual(values = c(black.transp, brown.transp))
+
+tu_24_08_2021_shannon
+```
+
+#### combined TU figures
+
+```{r warning=FALSE, fig.height=16, fig.width=8}
+combined_plot_tu <- plot_grid(tu1 , tu2, 
+                              tu_2020_alpha, tu_2020_shannon,
+                              tu_2021_alpha,tu_2021_shannon,
+                              tu_23_08_2020_alpha,tu_23_08_2020_shannon,
+                              tu_23_08_2020_t0_alpha,tu_23_08_2020_t0_shannon,
+                              tu_24_08_2021_alpha,tu_24_08_2021_shannon,
+                              labels = c("a","b","c","d","e","f","g","h","i","j","k","l"), 
+                              nrow = 6, ncol = 2)
+combined_plot_tu
+
+
+ggsave("fig_4_pub_2024_03_16/fig_tukey_all_alpha_shannon_gt.jpg", bg = "white")
+
+```
+
+#### treatments, 2020 autumn
+
+Tukey on Fisher alpha and shannon index,
+
+```{r}
+# What is the effect of the genotype on the indexes?
+## Tukey on Alpha
+
+alpha.asv_count_23_08_2020 = fisher.alpha(asv_count_23_08_2020)
+
+
+all(rownames(meta_date_23_08_2020) == rownames(alpha.asv_count_23_08_2020))
+
+
+model_alpha = lm(alpha.asv_count_23_08_2020~meta_date_23_08_2020$Treatment)
+ANOVA_alpha=aov(model_alpha)
+
+# Tukey test to study each pair of treatment :
+tukey_alpha <- TukeyHSD(x=ANOVA_alpha, 'meta_date_23_08_2020$Treatment', conf.level=0.95)
+tukey_alpha
+
+
+tukey_alpha_df <- as.data.frame(tukey_alpha$`meta_date_23_08_2020$Treatment`)
+tukey_alpha_df$significant <- ifelse(tukey_alpha_df$`p adj` < 0.05, "Significant", "Not Significant")
+
+# substituting the GT from row names
+row.names(tukey_alpha_df) <- gsub("GT","",as.character(row.names(tukey_alpha_df)))
+
+# Plotting
+tu_23_08_2020_t_alpha <- ggplot(tukey_alpha_df, aes(x = row.names(tukey_alpha_df), y = diff, ymin = lwr, ymax = upr, color = significant)) +
+  geom_point(stat = "identity", position = position_dodge(width = 0.8)) +
+  geom_errorbar(stat = "identity", position = position_dodge(width = 0.8), width = 0.25, size = 1) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray") +
+  labs(x = "", y = "") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme_classic() +
+  coord_flip()+
+  theme(legend.position = "none") +
+  scale_color_manual(values = c(black.transp, brown.transp))
+
+tu_23_08_2020_t_alpha
+
+
+## Tukey on shannon index
+
+shannon.asv_count_23_08_2020 = diversity(asv_count_23_08_2020)
+
+
+all(rownames(meta_date_23_08_2020) == rownames(asv_count_23_08_2020))
+
+# What is the effect of the genotype on the shannon ?
+
+model_shannon = lm(shannon.asv_count_23_08_2020~meta_date_23_08_2020$Treatment)
+ANOVA_shannon=aov(model_shannon)
+
+# Tukey test to study each pair of treatment :
+tukey_shannon <- TukeyHSD(x=ANOVA_shannon, 'meta_date_23_08_2020$Treatment', conf.level=0.95)
+tukey_shannon
+
+
+tukey_shannon_df <- as.data.frame(tukey_shannon$`meta_date_23_08_2020$Treatment`)
+tukey_shannon_df$significant <- ifelse(tukey_shannon_df$`p adj` < 0.05, "Significant", "Not Significant")
+
+# substituting the GT from row names
+row.names(tukey_shannon_df) <- gsub("GT","",as.character(row.names(tukey_shannon_df)))
+
+
+# Plotting
+tu_23_08_2020_t_shannon <- ggplot(tukey_shannon_df, aes(x = row.names(tukey_shannon_df), y = diff, ymin = lwr, ymax = upr, color = significant)) +
+  geom_point(stat = "identity", position = position_dodge(width = 0.8)) +
+  geom_errorbar(stat = "identity", position = position_dodge(width = 0.8), width = 0.25, size = 1) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray") +
+  labs(x = "", y = "") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme_classic() +
+  coord_flip()+
+  theme(legend.position = "none")+
+  scale_color_manual(values = c(black.transp, brown.transp))
+
+tu_23_08_2020_t_shannon
+```
+
+Results:
+
+-   it seems genotypic specificity is prominent in autumn session than the any other time of the year from both year
+-   In terms of alpha & shannon indexes it seems that genotypic specificity is prominent in all sessions irrespective of the year
+
+################################# 
+
+# Community compositions
+
+PCoA and NMDS plots All data
+
+```{r}
+# genotype
+shannon.ngs = diversity(asv_count)
+
+ngs.dist<- vegdist(asv_count, method="bray")
+# ngs.dist<- vegdist(decostand(asv_count,"range"), "altGower")
+pco.ngs<-pco(ngs.dist, k=2)
+```
+
+env fit variables
+
+```{r}
+pco.fit.env <- envfit(pco.ngs, metadata[,c(12,14,18, 20,22,24,26,28,30)], perm = 999, na.rm=TRUE)
+pco.fit.env
+```
+
+scores
+
+```{r}
+vegan::scores(pco.fit.env, "vectors")
+```
+
+how each axis explain the simmilarity or dissimilarity?
+
+```{r}
+eig.ngs<-pco.ngs$eig
+explain.ngs <- round(pco.ngs$eig*100/sum(pco.ngs$eig),1)
+explain.ngs
+```
+
+```{r}
+legend_labels <- c("method = bray")
+```
+
+## Figure 4
+
+### fig.4a pcoa
+
+```{r gt_col}
+
+g5 <-adjustcolor("#FF3300", alpha.f=0.3)
+g50 <-adjustcolor("#3366FF", alpha.f=0.3)
+g60 <-adjustcolor("#0000FF", alpha.f=0.3)
+g65 <-adjustcolor("#FF6633", alpha.f=0.3)
+g72 <-adjustcolor("#FF9966", alpha.f=0.3)
+g115 <-adjustcolor("#9999FF", alpha.f=0.3)
+
+```
+
+PCoA
+
+```{r pcoa , warning=FALSE}
+#| echo: false
+
+par(mfrow=c(1,1),bty = "l")
+plot(pco.ngs, type="n") 
+  with(metadata, ordiellipse(pco.ngs, genotype, kind="se", conf=.95,label=F, cex=2, show.groups="5", lwd=1, lty=1, col= g5))
+  with(metadata, ordiellipse(pco.ngs, genotype, kind="se", conf=.95,label=F, cex=2, show.groups="50", lwd=1, lty=, col= g50))
+  with(metadata, ordiellipse(pco.ngs, genotype, kind="se", conf=.95,label=F, cex=2, show.groups="60", lwd=1, lty=1, col= g60 ))
+  with(metadata, ordiellipse(pco.ngs, genotype, kind="se", conf=.95,label=F, cex=2, show.groups="65", lwd=1, lty=1, col= g65))
+  with(metadata, ordiellipse(pco.ngs, genotype, kind="se", conf=.95,label=F, cex=2, show.groups="72", lwd=1, lty=1, col=g72))
+  with(metadata, ordiellipse(pco.ngs, genotype, kind="se", conf=.95,label=F, cex=2, show.groups="115", lwd=1, lty=1, col=g115))
+
+  points(pco.ngs, metadata$genotype=="5", pch=21, bg=g5, cex=shannon.ngs*1, col=black.transp)
+  points(pco.ngs, metadata$genotype=="50", pch=21, bg=g50, cex=shannon.ngs*1, col=black.transp)
+  points(pco.ngs, metadata$genotype=="60", pch=21, bg=g60, cex=shannon.ngs*1, col=black.transp)
+  points(pco.ngs, metadata$genotype=="65", pch=21, bg=g65, cex=shannon.ngs*1, col=black.transp)
+  points(pco.ngs, metadata$genotype=="72", pch=21, bg=g72, cex=shannon.ngs*1, col=black.transp)
+ points(pco.ngs, metadata$genotype=="115", pch=21, bg=g115, cex=shannon.ngs*1, col=black.transp)
+
+  with(metadata, ordispider(pco.ngs, genotype, kind="se", conf=.95,label=T, cex=1.3, show.groups="5", lwd=0, lty=3, col=g5))
+  with(metadata, ordispider(pco.ngs, genotype, kind="se", conf=.95,label=T, cex=1.3, show.groups="50", lwd=0, lty=3, col=g50))
+  with(metadata, ordispider(pco.ngs, genotype, kind="se", conf=.95,label=T, cex=1.3, show.groups="60", lwd=0, lty=3, col=g60))
+  with(metadata, ordispider(pco.ngs, genotype, kind="se", conf=.95,label=T, cex=1.3, show.groups="65", lwd=0, lty=3, col=g65))
+  with(metadata, ordispider(pco.ngs, genotype, kind="se", conf=.95,label=T, cex=1.3, show.groups="72", lwd=0, lty=3, col=g72))
+  with(metadata, ordispider(pco.ngs, genotype, kind="se", conf=.95,label=T, cex=1.3, show.groups="115", lwd=0, lty=3, col=g115))
+
+# fit environmental variables
+# plot(pco.fit.env, col=blue.transp, lty=2, cex=0.6)
+  plot(pco.fit.env, p.max = 0.05, col="red", lty=1, cex=1.3)
+  # Created the legend without a border
+  legend("topleft", legend = legend_labels, cex = 0.8, box.lwd = "0.1",ncol = 3)
+
+
+  
+dev.print (device=tiff, file="fig_4_pub_2024_03_16/fig_4a_PCoA.tiff", units = "mm", width = 85, height = 85 , res=300)
+```
+
+```{r}
+adonis.ngs<-adonis2(ngs.dist~factor(metadata$date), perm=999)
+adonis.ngs
+adonis.ngs<-adonis2(ngs.dist~factor(metadata$Genotype), perm=999)
+adonis.ngs
+adonis.ngs<-adonis2(ngs.dist~factor(metadata$Treatment), perm=999)
+adonis.ngs
+```
+
+NMDS
+
+```{r}
+## NMDS,
+nms.ngs<-metaMDS(asv_count, autotransform=F, distance="bray")
+nms.ngs<-metaMDS(asv_count, previous=nms.ngs)
+# stressplot(nms.ngs)
+```
+
+```{r ngs_3a}
+#| echo: false
+nms.ngs
+
+# varience https://stackoverflow.com/questions/49223740/cumulative-variance-explained-for-nmds-in-r 
+nMDS <- metaMDS(asv_count, distance = "bray", k = 2)
+MDS <- cmdscale(vegdist(asv_count, method = "bray"), k = 2, eig = T, add = T )
+round(MDS$eig*100/sum(MDS$eig),1)
+```
+
+### fig.4b nmds
+
+```{r nmds 3b, warning=FALSE, fig.height=7, fig.width=7}
+#| echo: false
+
+par(mfrow=c(1,1), bty = "l")
+
+fig.ngs<-ordiplot(nms.ngs, type="none", main="")
+points(fig.ngs, "sites", pch=21, bg="lightgrey", cex=0.001)
+#points(fig.ngs, "species", pch=21, bg="lightgrey", cex=0.01)
+
+with(metadata, ordiellipse(fig.ngs, genotype, kind="se", conf=.95,label=T, cex=2, show.groups="5", lwd=1, lty=1, col=g5))
+with(metadata, ordiellipse(fig.ngs, genotype, kind="se", conf=.95,label=T, cex=2, show.groups="50", lwd=1, lty=1, col=g50))
+with(metadata, ordiellipse(fig.ngs, genotype, kind="se", conf=.95,label=T, cex=2, show.groups="60", lwd=1, lty=1, col=g60))
+with(metadata, ordiellipse(fig.ngs, genotype, kind="se", conf=.95,label=T, cex=2, show.groups="65", lwd=1, lty=1, col=g65))
+with(metadata, ordiellipse(fig.ngs, genotype, kind="se", conf=.95,label=T, cex=2, show.groups="72", lwd=1, lty=1, col=g72))
+with(metadata, ordiellipse(fig.ngs, genotype, kind="se", conf=.95,label=T, cex=2, show.groups="115", lwd=1, lty=1, col=g115))
+
+
+points(fig.ngs, "sites", pch=21, bg=g5, select=metadata$Genotype=="GT5", cex=shannon.ngs*1)
+points(fig.ngs, "sites", pch=21, bg=g50, select=metadata$Genotype=="GT50", cex=shannon.ngs*1)
+points(fig.ngs, "sites", pch=21, bg=g60, select=metadata$Genotype=="GT60", cex=shannon.ngs*1)
+points(fig.ngs, "sites", pch=21, bg=g65, select=metadata$Genotype=="GT65", cex=shannon.ngs*1)
+points(fig.ngs, "sites", pch=21, bg=g72, select=metadata$Genotype=="GT72", cex=shannon.ngs*1)
+points(fig.ngs, "sites", pch=21, bg=g115, select=metadata$Genotype=="GT115", cex=shannon.ngs*1)
+
+
+with(metadata, ordispider(fig.ngs, genotype, kind="se", conf=.95,label=T, cex=1.3, show.groups="5", lwd=0, lty=2, col=g5))
+with(metadata, ordispider(fig.ngs, genotype, kind="se", conf=.95,label=T, cex=1.3, show.groups="50", lwd=0, lty=2, col=g50))
+with(metadata, ordispider(fig.ngs, genotype, kind="se", conf=.95,label=T, cex=1.3, show.groups="60", lwd=0, lty=2, col=g60))
+with(metadata, ordispider(fig.ngs, genotype, kind="se", conf=.95,label=T, cex=1.3, show.groups="65", lwd=0, lty=2, col=g65))
+with(metadata, ordispider(fig.ngs, genotype, kind="se", conf=.95,label=T, cex=1.3, show.groups="72", lwd=0, lty=2, col=g72))
+with(metadata, ordispider(fig.ngs, genotype, kind="se", conf=.95,label=T, cex=1.3, show.groups="115", lwd=0, lty=2, col=g115))
+
+# text(-1.65, 0.7, "72", adj = 0, cex = 1.3)
+
+# fit environmental variables
+nmds.fit.env <- envfit(fig.ngs, metadata[,c(12,14,18, 20,22,24,26,28,30)], perm = 999, na.rm=TRUE)
+
+# plot(nmds.fit.env, col=blue.transp, lty=2, cex=0.6)
+plot(nmds.fit.env, p.max = 0.05, col="red", lty=2, cex=1)
+
+# legend("bottomright", legend =c("NMDS1 = 24.5 %", "MMDS2 =   12.4 %", "Stress < 0.18" , "distance = bray"), cex= 0.6)
+# Create the legend without a border
+legend("topleft", legend =c("NMDS1 = 21.8 %", "  NMDS2 = 11.2 %", "  Stress < 0.17", "distance = bray"), cex = 0.8, box.lwd = "0.1", ncol = 4)
+
+dev.print (device=tiff, file="fig_4_pub_2024_03_16/fig_4b_NMDS.tiff",units = "mm", width = 170, height = 165 , res=300)
+
+```
+
+### NMDS + PCoA
+
+```{r warning=FALSE}
+#| echo: false
+
+par(mfrow=c(1,2),bty = "l")
+
+fig.ngs<-ordiplot(nms.ngs, type="none", main="", xlab="NMDS1 (21.8 %)", ylab= "NMDS2 (11.2 %)", cex.axis = 0.7, cex.lab= 0.8)
+points(fig.ngs, "sites", pch=21, bg="lightgrey", cex=0.001)
+#points(fig.ngs, "species", pch=21, bg="lightgrey", cex=0.01)
+
+with(metadata, ordiellipse(fig.ngs, genotype, kind="se", conf=.95,label=T, cex=0.7, show.groups="5", lwd=1, lty=1, col=g5))
+with(metadata, ordiellipse(fig.ngs, genotype, kind="se", conf=.95,label=T, cex=0.7, show.groups="50", lwd=1, lty=1, col=g50))
+with(metadata, ordiellipse(fig.ngs, genotype, kind="se", conf=.95,label=T, cex=0.7, show.groups="60", lwd=1, lty=1, col=g60))
+with(metadata, ordiellipse(fig.ngs, genotype, kind="se", conf=.95,label=T, cex=0.7, show.groups="65", lwd=1, lty=1, col=g65))
+with(metadata, ordiellipse(fig.ngs, genotype, kind="se", conf=.95,label=T, cex=0.7, show.groups="72", lwd=1, lty=1, col=g72))
+with(metadata, ordiellipse(fig.ngs, genotype, kind="se", conf=.95,label=T, cex=0.7, show.groups="115", lwd=1, lty=1, col=g115))
+
+
+points(fig.ngs, "sites", pch=21, bg=g5, select=metadata$Genotype=="GT5", cex=shannon.ngs*0.6)
+points(fig.ngs, "sites", pch=21, bg=g50, select=metadata$Genotype=="GT50", cex=shannon.ngs*0.6)
+points(fig.ngs, "sites", pch=21, bg=g60, select=metadata$Genotype=="GT60", cex=shannon.ngs*0.6)
+points(fig.ngs, "sites", pch=21, bg=g65, select=metadata$Genotype=="GT65", cex=shannon.ngs*0.6)
+points(fig.ngs, "sites", pch=21, bg=g72, select=metadata$Genotype=="GT72", cex=shannon.ngs*0.6)
+points(fig.ngs, "sites", pch=21, bg=g115, select=metadata$Genotype=="GT115", cex=shannon.ngs*0.6)
+
+
+with(metadata, ordispider(fig.ngs, genotype, kind="se", conf=.95,label=T, cex=0.7, show.groups="5", lwd=0, lty=2, col=g5))
+with(metadata, ordispider(fig.ngs, genotype, kind="se", conf=.95,label=T, cex=0.7, show.groups="50", lwd=0, lty=2, col=g50))
+with(metadata, ordispider(fig.ngs, genotype, kind="se", conf=.95,label=T, cex=0.7, show.groups="60", lwd=0, lty=2, col=g60))
+with(metadata, ordispider(fig.ngs, genotype, kind="se", conf=.95,label=T, cex=0.7, show.groups="65", lwd=0, lty=2, col=g65))
+with(metadata, ordispider(fig.ngs, genotype, kind="se", conf=.95,label=T, cex=0.7, show.groups="72", lwd=0, lty=2, col=g72))
+with(metadata, ordispider(fig.ngs, genotype, kind="se", conf=.95,label=T, cex=0.7, show.groups="115", lwd=0, lty=2, col=g115))
+
+mtext("a", side = 3,adj = 0, line = -2, outer = TRUE)
+
+# fit environmental variables
+nmds.fit.env <- envfit(fig.ngs, metadata[,c(12,14,18, 20,22,24,26,28,30)], perm = 999, na.rm=TRUE)
+
+# plot(nmds.fit.env, col=blue.transp, lty=2, cex=0.6)
+plot(nmds.fit.env, p.max = 0.05, col="red", lty=2, cex=0.4)
+
+# legend("bottomright", legend =c("NMDS1 = 24.5 %", "MMDS2 =   12.4 %", "Stress < 0.18" , "distance = bray"), cex= 0.6)
+# Create the legend without a border
+legend("topleft", legend =c("Stress < 0.17","distance = bray"), cex = 0.7, box.lwd = "0.1", ncol = 4)
+
+
+
+
+plot(pco.ngs, type="n",col.lab = 'white',cex.axis = 0.7, cex.lab= 0.8)
+  with(metadata, ordiellipse(pco.ngs, genotype, kind="se", conf=.95,label=F, cex=0.7, show.groups="5", lwd=1, lty=1, col= g5))
+  with(metadata, ordiellipse(pco.ngs, genotype, kind="se", conf=.95,label=F, cex=0.7, show.groups="50", lwd=1, lty=, col= g50))
+  with(metadata, ordiellipse(pco.ngs, genotype, kind="se", conf=.95,label=F, cex=0.7, show.groups="60", lwd=1, lty=1, col= g60 ))
+  with(metadata, ordiellipse(pco.ngs, genotype, kind="se", conf=.95,label=F, cex=0.7, show.groups="65", lwd=1, lty=1, col= g65))
+  with(metadata, ordiellipse(pco.ngs, genotype, kind="se", conf=.95,label=F, cex=0.7, show.groups="72", lwd=1, lty=1, col=g72))
+  with(metadata, ordiellipse(pco.ngs, genotype, kind="se", conf=.95,label=F, cex=0.7, show.groups="115", lwd=1, lty=1, col=g115))
+ 
+  points(pco.ngs, metadata$genotype=="5", pch=21, bg=g5, cex=shannon.ngs*0.6, col=black.transp)
+  points(pco.ngs, metadata$genotype=="50", pch=21, bg=g50, cex=shannon.ngs*0.6, col=black.transp)
+  points(pco.ngs, metadata$genotype=="60", pch=21, bg=g60, cex=shannon.ngs*0.6, col=black.transp)
+  points(pco.ngs, metadata$genotype=="65", pch=21, bg=g65, cex=shannon.ngs*0.6, col=black.transp)
+  points(pco.ngs, metadata$genotype=="72", pch=21, bg=g72, cex=shannon.ngs*0.6, col=black.transp)
+ points(pco.ngs, metadata$genotype=="115", pch=21, bg=g115, cex=shannon.ngs*0.6, col=black.transp)
+
+  with(metadata, ordispider(pco.ngs, genotype, kind="se", conf=.95,label=T, cex=0.7, show.groups="5", lwd=0, lty=3, col=g5))
+  with(metadata, ordispider(pco.ngs, genotype, kind="se", conf=.95,label=T, cex=0.7, show.groups="50", lwd=0, lty=3, col=g50))
+  with(metadata, ordispider(pco.ngs, genotype, kind="se", conf=.95,label=T, cex=0.7, show.groups="60", lwd=0, lty=3, col=g60))
+  with(metadata, ordispider(pco.ngs, genotype, kind="se", conf=.95,label=T, cex=0.7, show.groups="65", lwd=0, lty=3, col=g65))
+  with(metadata, ordispider(pco.ngs, genotype, kind="se", conf=.95,label=T, cex=0.7, show.groups="72", lwd=0, lty=3, col=g72))
+  with(metadata, ordispider(pco.ngs, genotype, kind="se", conf=.95,label=T, cex=0.7, show.groups="115", lwd=0, lty=3, col=g115))
+
+# fit environmental variables
+# plot(pco.fit.env, col=blue.transp, lty=2, cex=0.6)
+  plot(pco.fit.env, p.max = 0.05, col="red", lty=1, cex=0.4, cex.lab= 0.8)
+  
+  # Created the legend without a border
+  legend("topleft", legend = legend_labels, cex = 0.7, box.lwd = "0.1",ncol = 3)
+  title(xlab="PCO1 (55.8 %)",  ylab="PCO2 (24.0 %)", cex = 0.7,  cex.lab= 0.8) 
+
+mtext("b", side = 3,  line = -2, outer = TRUE)
+
+dev.print (device=tiff, file="fig_4_pub_2024_03_16/fig_4ab.tiff",units = "mm", width = 170, height = 105 , res=300)
+
+```
+
+Test NMDS env fit
+
+```{r}
+nmds.fit.env
+```
+
+```{r}
+vegan::scores(nmds.fit.env, "vectors")
+```
+
+#### 2020 data
+
+```{r}
+# genotype
+shannon.ngs_2020 = diversity(asv_count_2020)
+
+ngs.dist_2020<- vegdist(asv_count_2020, method="bray")
+# ngs.dist_2020<- vegdist(decostand(asv_count_2020,"range"), "altGower")
+pco.ngs_2020<-pco(ngs.dist_2020, k=2)
+```
+
+env fit variables
+
+```{r}
+pco.fit.env_2020 <- envfit(pco.ngs_2020, metadata_2020[,c(12,14,18, 20,22,24,26,28,30)], perm = 999, na.rm=TRUE)
+pco.fit.env_2020
+```
+
+scores
+
+```{r}
+vegan::scores(pco.fit.env_2020, "vectors")
+```
+
+##### fig.4.1_2020: PCoA
+
+```{r pcoa 3a, warning=FALSE, fig.height=7, fig.width=8}
+#| echo: false
+
+par(mfrow=c(1,1),bty = "l")
+plot(pco.ngs_2020, type="n")
+
+with(metadata_2020, ordiellipse(pco.ngs_2020, genotype, kind="se", conf=.95,label=F, cex=2, show.groups="5", lwd=1, lty=1, col= g5))
+with(metadata_2020, ordiellipse(pco.ngs_2020, genotype, kind="se", conf=.95,label=F, cex=2, show.groups="50", lwd=1, lty=, col= g50))
+with(metadata_2020, ordiellipse(pco.ngs_2020, genotype, kind="se", conf=.95,label=F, cex=2, show.groups="60", lwd=1, lty=1, col= g60 ))
+with(metadata_2020, ordiellipse(pco.ngs_2020, genotype, kind="se", conf=.95,label=F, cex=2, show.groups="65", lwd=1, lty=1, col= g65))
+with(metadata_2020, ordiellipse(pco.ngs_2020, genotype, kind="se", conf=.95,label=F, cex=2, show.groups="72", lwd=1, lty=1, col=g72))
+with(metadata_2020, ordiellipse(pco.ngs_2020, genotype, kind="se", conf=.95,label=F, cex=2, show.groups="115", lwd=1, lty=1, col=g115))
+
+points(pco.ngs_2020, metadata_2020$genotype=="5", pch=21, bg=g5, cex=shannon.ngs_2020*1, col=black.transp)
+points(pco.ngs_2020, metadata_2020$genotype=="50", pch=21, bg=g50, cex=shannon.ngs_2020*1, col=black.transp)
+points(pco.ngs_2020, metadata_2020$genotype=="60", pch=21, bg=g60, cex=shannon.ngs_2020*1, col=black.transp)
+points(pco.ngs_2020, metadata_2020$genotype=="65", pch=21, bg=g65, cex=shannon.ngs_2020*1, col=black.transp)
+points(pco.ngs_2020, metadata_2020$genotype=="72", pch=21, bg=g72, cex=shannon.ngs_2020*1, col=black.transp)
+points(pco.ngs_2020, metadata_2020$genotype=="115", pch=21, bg=g115, cex=shannon.ngs_2020*1, col=black.transp)
+
+with(metadata_2020, ordispider(pco.ngs_2020, genotype, kind="se", conf=.95,label=T, cex=1.3, show.groups="5", lwd=0, lty=3, col=g5))
+with(metadata_2020, ordispider(pco.ngs_2020, genotype, kind="se", conf=.95,label=T, cex=1.3, show.groups="50", lwd=0, lty=3, col=g50))
+with(metadata_2020, ordispider(pco.ngs_2020, genotype, kind="se", conf=.95,label=T, cex=1.3, show.groups="60", lwd=0, lty=3, col=g60))
+with(metadata_2020, ordispider(pco.ngs_2020, genotype, kind="se", conf=.95,label=T, cex=1.3, show.groups="65", lwd=0, lty=3, col=g65))
+with(metadata_2020, ordispider(pco.ngs_2020, genotype, kind="se", conf=.95,label=T, cex=1.3, show.groups="72", lwd=0, lty=3, col=g72))
+with(metadata_2020, ordispider(pco.ngs_2020, genotype, kind="se", conf=.95,label=T, cex=1.3, show.groups="115", lwd=0, lty=3, col=g115))
+
+# fit environmental variables
+# plot(pco.fit.env_2020, col=blue.transp, lty=2, cex=0.6)
+plot(pco.fit.env_2020, p.max = 0.05, col="red", lty=1, cex=1.3)
+
+eig.ngs_2020<-pco.ngs_2020$eig
+explain.ngs_2020 <- round(pco.ngs_2020$eig*100/sum(pco.ngs_2020$eig),1)
+
+# legend("bottomleft", legend =c("PCO1 = 61.3 %", "PCO2 =   26.1 %" , "method = bray"), cex= 0.6,border = )
+# Sample legend labels
+legend_labels <- c("PCO1 = 61.9 %", " PCO2 = 24.6 %", " method = bray") # print explain.ngs_2020
+
+# Create the legend without a border
+legend("bottomleft", legend = legend_labels, cex = 0.8, box.lwd = "0",ncol = 3)
+
+dev.print (device=jpeg, file="fig_4_pub_2024_03_16/fig_4a_PCoA_2020.jpg", width=par("din")[1]*300, res=300, quality=100)
+```
+
+```{r}
+adonis.ngs_2020<-adonis2(ngs.dist_2020~factor(metadata_2020$date), perm=999)
+adonis.ngs_2020
+adonis.ngs_2020<-adonis2(ngs.dist_2020~factor(metadata_2020$Genotype), perm=999)
+adonis.ngs_2020
+adonis.ngs_2020<-adonis2(ngs.dist_2020~factor(metadata_2020$Treatment), perm=999)
+adonis.ngs_2020
+```
+
+NMDS
+
+```{r}
+## NMDS,
+nms.ngs_2020<-metaMDS(asv_count_2020, autotransform=F, distance="bray")
+nms.ngs_2020<-metaMDS(asv_count_2020, previous=nms.ngs_2020)
+# stressplot(nms.ngs_2020)
+```
+
+```{r ngs_}
+#| echo: false
+nms.ngs_2020
+
+# varience https://stackoverflow.com/questions/49223740/cumulative-variance-explained-for-nmds-in-r 
+nMDS_2020 <- metaMDS(asv_count_2020, distance = "bray", k = 2)
+MDS_2020 <- cmdscale(vegdist(asv_count_2020, method = "bray"), k = 2, eig = T, add = T )
+round(MDS_2020$eig*100/sum(MDS_2020$eig),1)
+
+```
+
+##### fig.4.1_2020: NMDS
+
+```{r nmds, warning=FALSE, fig.height=7, fig.width=7}
+#| echo: false
+
+par(mfrow=c(1,1), bty = "l")
+
+fig.ngs_2020<-ordiplot(nms.ngs_2020, type="none", main="")
+points(fig.ngs_2020, "sites", pch=21, bg="lightgrey", cex=0.001)
+#points(fig.ngs_2020, "species", pch=21, bg="lightgrey", cex=0.01)
+
+with(metadata_2020, ordiellipse(fig.ngs_2020, genotype, kind="se", conf=.95,label=T, cex=2, show.groups="5", lwd=1, lty=1, col=g5))
+with(metadata_2020, ordiellipse(fig.ngs_2020, genotype, kind="se", conf=.95,label=T, cex=2, show.groups="50", lwd=1, lty=1, col=g50))
+with(metadata_2020, ordiellipse(fig.ngs_2020, genotype, kind="se", conf=.95,label=T, cex=2, show.groups="60", lwd=1, lty=1, col=g60))
+with(metadata_2020, ordiellipse(fig.ngs_2020, genotype, kind="se", conf=.95,label=T, cex=2, show.groups="65", lwd=1, lty=1, col=g65))
+with(metadata_2020, ordiellipse(fig.ngs_2020, genotype, kind="se", conf=.95,label=T, cex=2, show.groups="72", lwd=1, lty=1, col=g72))
+with(metadata_2020, ordiellipse(fig.ngs_2020, genotype, kind="se", conf=.95,label=T, cex=2, show.groups="115", lwd=1, lty=1, col=g115))
+
+
+points(fig.ngs_2020, "sites", pch=21, bg=g5, select=metadata_2020$Genotype=="GT5", cex=shannon.ngs_2020*1)
+points(fig.ngs_2020, "sites", pch=21, bg=g50, select=metadata_2020$Genotype=="GT50", cex=shannon.ngs_2020*1)
+points(fig.ngs_2020, "sites", pch=21, bg=g60, select=metadata_2020$Genotype=="GT60", cex=shannon.ngs_2020*1)
+points(fig.ngs_2020, "sites", pch=21, bg=g65, select=metadata_2020$Genotype=="GT65", cex=shannon.ngs_2020*1)
+points(fig.ngs_2020, "sites", pch=21, bg=g72, select=metadata_2020$Genotype=="GT72", cex=shannon.ngs_2020*1)
+points(fig.ngs_2020, "sites", pch=21, bg=g115, select=metadata_2020$Genotype=="GT115", cex=shannon.ngs_2020*1)
+
+
+with(metadata_2020, ordispider(fig.ngs_2020, genotype, kind="se", conf=.95,label=T, cex=1.3, show.groups="5", lwd=0, lty=2, col=g5))
+with(metadata_2020, ordispider(fig.ngs_2020, genotype, kind="se", conf=.95,label=T, cex=1.3, show.groups="50", lwd=0, lty=2, col=g50))
+with(metadata_2020, ordispider(fig.ngs_2020, genotype, kind="se", conf=.95,label=T, cex=1.3, show.groups="60", lwd=0, lty=2, col=g60))
+with(metadata_2020, ordispider(fig.ngs_2020, genotype, kind="se", conf=.95,label=T, cex=1.3, show.groups="65", lwd=0, lty=2, col=g65))
+with(metadata_2020, ordispider(fig.ngs_2020, genotype, kind="se", conf=.95,label=T, cex=1.3, show.groups="72", lwd=0, lty=2, col=g72))
+with(metadata_2020, ordispider(fig.ngs_2020, genotype, kind="se", conf=.95,label=T, cex=1.3, show.groups="115", lwd=0, lty=2, col=g115))
+
+# text(-1.25, 0.55, "72", adj = 0, cex = 1.3)
+
+# fit environmental variables
+nmds.fit.env_2020 <- envfit(fig.ngs_2020, metadata_2020[,c(12,14,18, 20,22,24,26,28,30)], perm = 999, na.rm=TRUE)
+
+# plot(nmds.fit.env, col=blue.transp, lty=2, cex=0.6)
+plot(nmds.fit.env_2020, p.max = 0.05, col="red", lty=2, cex=1.3)
+
+# legend("bottomright", legend =c("NMDS1 = 24.5 %", "MMDS2 =   12.4 %", "Stress < 0.18" , "distance = bray"), cex= 0.6)
+# Create the legend without a border
+legend("bottomleft", legend =c("NMDS1 = 26.4 %","MMDS2 = 12.5 %","Stress < 0.18","distance = bray"), cex = 0.8, box.lwd = "0", ncol = 4)
+
+dev.print (device=jpeg, file="fig_4_pub_2024_03_16/fig_4b_NMDS_2020.jpg", width=par("din")[1]*300, res=300, quality=100)
+
+```
+
+Test NMDS env fit
+
+```{r}
+nmds.fit.env_2020
+```
+
+```{r}
+vegan::scores(nmds.fit.env_2020, "vectors")
+```
+
+# Taxonomy and funguild compositions
+
+## Figure 5
+
+```{r}
+#| echo: false
+
+abund_table <- as.data.frame(t(t_mode))
+
+meta_table <- metadata
+
+#Just a check to ensure that the samples in meta_table are in the same order as in abund_table
+meta_table <- meta_table[rownames(abund_table),]
+```
+
+subset
+
+```{r}
+p_GT72 <- as.data.frame(subset(abund_table, meta_table$Genotype == "GT72"))
+p_GT72_sum <- c(sum(p_GT72[,2]), sum(p_GT72[,3]),sum(p_GT72[,4]), sum(p_GT72[,5]),sum(p_GT72[,6]), sum(p_GT72[,7]), sum(p_GT72[,8]))
+ 
+p_GT65 <- as.data.frame(subset(abund_table, meta_table$Genotype == "GT65"))
+p_GT65_sum <- c(sum(p_GT65[,2]), sum(p_GT65[,3]),sum(p_GT65[,4]), sum(p_GT65[,5]),sum(p_GT65[,6]), sum(p_GT65[,7]), sum(p_GT65[,8]))
+
+p_GT5 <- as.data.frame(subset(abund_table, meta_table$Genotype == "GT5"))
+p_GT5_sum <- c(sum(p_GT5[,2]), sum(p_GT5[,3]),sum(p_GT5[,4]), sum(p_GT5[,5]),sum(p_GT5[,6]), sum(p_GT5[,7]), sum(p_GT5[,8]))
+ 
+p_GT50 <- as.data.frame(subset(abund_table, meta_table$Genotype == "GT50"))
+p_GT50_sum <- c(sum(p_GT50[,2]), sum(p_GT50[,3]),sum(p_GT50[,4]), sum(p_GT50[,5]),sum(p_GT50[,6]), sum(p_GT50[,7]), sum(p_GT50[,8]))
+ 
+p_GT60 <- as.data.frame(subset(abund_table, meta_table$Genotype == "GT60"))
+p_GT60_sum <- c(sum(p_GT60[,2]), sum(p_GT60[,3]),sum(p_GT60[,4]), sum(p_GT60[,5]),sum(p_GT60[,6]), sum(p_GT60[,7]), sum(p_GT60[,8]))
+ 
+p_GT115 <- as.data.frame(subset(abund_table, meta_table$Genotype == "GT115"))
+p_GT115_sum <- c(sum(p_GT115[,2]), sum(p_GT115[,3]),sum(p_GT115[,4]), sum(p_GT115[,5]),sum(p_GT115[,6]), sum(p_GT115[,7]), sum(p_GT115[,8]))
+
+
+pie_df <- data.frame (p_GT72_sum, p_GT65_sum, p_GT5_sum,
+                      p_GT50_sum, p_GT60_sum, p_GT115_sum)
+
+pie_df$TrMo <- c( "Pa", "Pa-Sa", "Pa-Sa-Sy",
+            "Pa-Sy" ,"Sa","Sa-Sy","Sy")
+
+pie_df_gather <- gather(pie_df, key = "GTs", value = "value", - TrMo)
+
+pie_df_gather$GTs <- c("GT72", "GT65", "GT5", "GT50", "GT60", "GT115")
+
+
+pie_df_gather$GTs <- factor(pie_df_gather$GTs)
+
+pie_df_gather$TrMo <- factor(pie_df_gather$TrMo)
+
+pie_df_gather$ct_group = as.numeric(as.factor(pie_df_gather$GTs))
+
+pie_df_gather <- pie_df_gather %>% 
+  mutate(ct_group = case_when(ct_group == 6 ~ "high",
+                              ct_group == 5 ~ "high",
+                              ct_group == 2 ~ "high",
+                              ct_group == 3 ~ "low",
+                              ct_group == 4 ~ "low",
+                              ct_group == 1 ~ "low",
+                              TRUE ~ NA_character_))
+
+ 
+lbls <- c( "Pa", "Pa-Sa", "Pa-Sa-Sy","Pa-Sy" ,"Sa","Sa-Sy","Sy")
+
+# removing all zero from the data and asscociated TM group
+pie_df_d_tm <- pie_df[!(pie_df$p_GT72_sum == 0),]
+
+lbls_updated <- c( "Pa", "Pa-Sa", "Pa-Sa-Sy","Pa-Sy" ,"Sa","Sy")
+# we deleted 'Sa-Sy' because of zero everywhere except in GT50
+
+```
+
+```{r fig.width=7, fig.height=7, include=FALSE}
+#| echo: false
+# https://stackoverflow.com/questions/73307670/message-of-error-when-plotting-a-3d-pie-chart-on-r
+par(mfrow=c(1,1))
+
+pie3D(pie_df$p_GT50_sum,height = 0.1,theta = 0.7,border = "white",col = rainbow(length(lbls)),shade = 0.5,explode = 0.1,main = "GT50") 
+
+legend(-0.93, 0.9, horiz = TRUE, pie_df$TrMo, cex = 0.6, fill = rainbow(length(lbls)))
+
+```
+
+```{r}
+#| echo: false
+
+p5 <- ggplot(data=pie_df_d_tm, aes(x=" ", y=p_GT5_sum, colours= TrMo, fill=TrMo)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar(theta = "y",start = 70, clip = "off") + 
+  theme_void() +
+  scale_fill_npg() + labs(title = "GT5" ) + 
+  theme(legend.position = "none") + 
+  ggtitle("GT5") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+p50 <- ggplot(data=pie_df_d_tm, aes(x=" ", y=p_GT50_sum, colours= TrMo, fill=TrMo)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar(theta = "y",start = 70, clip = "off") + 
+  theme_void() +
+  scale_fill_npg() + 
+  theme(legend.position = "none") + 
+  ggtitle("GT50") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+p60 <- ggplot(data=pie_df_d_tm, aes(x=" ", y=p_GT60_sum, colours= TrMo, fill=TrMo)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar(theta = "y",start = 70, clip = "off") + 
+  theme_void() +
+  scale_fill_npg() + 
+  theme(legend.position = "none") + 
+  ggtitle("GT60") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+p65 <- ggplot(data=pie_df_d_tm, aes(x=" ", y=p_GT65_sum, colours= TrMo, fill=TrMo)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar(theta = "y",start = 70, clip = "off") + 
+  theme_void() +
+  scale_fill_npg() + 
+  theme(legend.position = "none") + 
+  ggtitle("GT65") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+p72 <- ggplot(data=pie_df_d_tm, aes(x=" ", y=p_GT72_sum, colours= TrMo, fill=TrMo)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar(theta = "y",start = 70, clip = "off") + 
+  theme_void() +
+  scale_fill_npg() + 
+  theme(legend.position = "none") + 
+  ggtitle("GT72") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+p115 <- ggplot(data=pie_df_d_tm, aes(x=" ", y=p_GT115_sum, colours= TrMo, fill=TrMo)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar(theta = "y",start = 70, clip = "off") + 
+  theme_void() +
+  scale_fill_npg() + 
+  theme(legend.position = "none") + 
+  ggtitle("GT115") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+pl <- ggplot(data=pie_df_d_tm, aes(x=" ", y=p_GT115_sum, colours= TrMo, fill=TrMo)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar(theta = "y",start = 70, clip = "off") + 
+  theme_void() +
+  scale_fill_npg(name = "Trophic mode") + 
+  theme(legend.position = "right", legend.direction = "vertical"	, legend.box.just = "left")
+
+```
+
+fig.5a Determination of reads & ASVs to taxonomic unit
+
+```{r,fig.height=6, fig.width=10}
+data_raw <- read.table(text = "Taxa_rank Reads log10_reads percent asv_numb
+Total 30081923 7.478305595 100 581
+Domain 30081905 7.478305335 99.99994016 580
+Kingdom 30081867 7.478304787 99.99981384 579
+Phylum 30077365 7.478239786 99.98484804 557
+Class 432414 5.635899746 1.437454647 314
+Order 419500 5.622731965 1.39452521 258
+Family 208625 5.31936635 0.693522818 190
+Genus 294298 5.468787311 0.978321765 183
+Species 196187 5.292670226 0.652175727 54", header = TRUE)
+
+data_raw <- tibble(data_raw)
+
+data <- data_raw[2:9,]
+# Value used to transform the data
+coeff <- 6
+
+# A few constants
+temperatureColor <- "#69b3a2"
+priceColor <- rgb(0.2, 0.6, 0.9, 1)
+
+data$Taxa_rank <- forcats::as_factor(data$Taxa_rank)
+
+data
+```
+
+### fig 5a
+
+```{r}
+deter_asv <- ggplot(data, aes(x = factor(Taxa_rank))) +
+  geom_point( aes(y=asv_numb), color= "black",shape= 13)+
+  geom_line(aes(y=asv_numb), linetype = 2, group = "asv_numb", size =1, color= "black") + 
+  theme_minimal_grid() +
+  scale_y_continuous(expand = c(0,1), limits = c(0,581))+ ylab(NULL) + xlab(NULL) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=0.5), legend.position = "none", panel.grid = element_blank()) 
+
+deter_asv
+```
+
+### fig.5b
+
+```{r warning=FALSE}
+tax1 <- read_excel("path/to/taxonomy_file/Combined_DADA2_Qiime2 (2).xlsx")
+
+tax <- as.data.frame(tax1, na.rm = TRUE)
+
+tax <- tax [,c(6,8,12:355)]
+
+tax_long <- pivot_longer(data = tax, cols = starts_with("P"), names_to = "sample_name", values_to = "rel_abd" ) 
+
+tax_long[is.na(tax_long)] <- 'Unknown' # unknown
+
+tax_long_rel <- tax_long %>% 
+  mutate(rel_gen=rel_abd/sum(rel_abd))
+
+tax_long_rel <- dplyr::filter(tax_long_rel, Order %in% c("Dothideales", "Helotiales", "Capnodiales" , "Saccharomycetales"))
+
+tax_long_rel_gen <- tax_long_rel %>% 
+  group_by (Order, Genus) %>%
+  summarise(Values = sum(rel_gen))
+
+tax_long_rel_gen$log_val <-  log10(tax_long_rel_gen$Values)
+
+gray_palette <- gray(seq(0.1, 1, length.out = 50))
+
+
+## https://stackoverflow.com/questions/49985971/adjusting-stacked-bar-width-according-to-proportions-of-categories-in-ggplot2
+
+order_prop = tax_long_rel_gen %>% 
+  group_by(Order) %>% 
+  summarise(order_prop = n()/nrow(tax_long_rel_gen))
+
+tax_long_rel_gen_ord_prop = left_join(tax_long_rel_gen, order_prop)
+
+
+df <- tax_long_rel_gen_ord_prop %>% 
+  count(Order,order_prop, Values, log_val, Genus) %>% 
+  group_by(Order) %>% 
+  mutate(freq = n / sum(n)) %>% 
+  ungroup
+```
+
+```{r warning=FALSE}
+dplot <- ggplot(data = df,
+       aes(y = factor (Order, labels = c("C", "D","H","S")) , x = log_val, width = order_prop, color = Genus)) +
+  geom_bar(stat = "identity", fill = NA, position = "fill", color = black.transp) +
+  theme_minimal_grid() + 
+  theme(legend.position = "none", panel.grid = element_blank(), axis.text.x = element_blank(),axis.ticks.x = element_blank()) +
+  ylab(NULL) + xlab(NULL)
+
+dplot
+
+```
+
+###### top 10 genera plot
+
+Genera
+
+```{r}
+abund_table <- t(genera)
+
+abund_table_2020_2021_s4_s7 <- as.data.frame(
+  subset(abund_table,metadata$event=="S4"|metadata$event=="S7"))
+#Just a check to ensure that the samples in meta_table are in the same order as in abund_table
+# metadata_2020_2021_control_s4_s7 <- meta_table[rownames(abund_table_2020_2021_s4_s7),]
+
+#Get grouping information
+head(metadata)
+grouping_info <- data.frame(row.names=rownames(abund_table),metadata[,c(3,4,5,8,10)],t(as.data.frame(strsplit(rownames(abund_table),"s"))))
+head(grouping_info)
+```
+
+```{r}
+#Apply proportion normalisation , we already took rel abund fle so do not need
+x<-abund_table
+x<-x[,order(colSums(x),decreasing=TRUE)]
+
+#Extract list of top N Taxa
+N<-20
+taxa_list<-colnames(x)[1:N]
+#remove "__Unknown__" and add it to others
+taxa_list<-taxa_list[!grepl("Unknown",taxa_list)]
+N<-length(taxa_list)
+taxa_list
+head(taxa_list)
+#Generate a new table with everything added to Others
+new_x<-data.frame(x[,colnames(x) %in% taxa_list],Others=rowSums(x[,!colnames(x) %in% taxa_list]))
+head(new_x)
+dim(new_x)
+```
+
+```{r}
+### subsets 
+
+df_x<-NULL
+for (i in 1:dim(new_x)[2]){
+  tmp<-data.frame(row.names=NULL,Sample=rownames(new_x),Taxa=rep(colnames(new_x)[i],dim(new_x)[1]),Value=new_x[,i],
+                  date=grouping_info[,1], event= grouping_info[,2], year=grouping_info[,3], Genotype=grouping_info[,4], Treatment=grouping_info[,5]) # grouping_info[,3] can be changed into 2 (year), 4 (treatment) as well
+  if(i==1){df_x<-tmp} else {df_x<-rbind(df_x,tmp)}
+}
+
+# others appears at row no. 6536.
+
+df_x = df_x[1:6403,] # orders: remove others or Unassigned from the data
+```
+
+```{r}
+gtest0 <- ggplot(data = df_x, aes(x= Taxa, y = Value, fill = Taxa)) +
+  geom_bar(stat="identity", width=.5, position = "dodge")+
+    theme_minimal_hgrid() + xlab("Genera") + ylab("rel. abundance") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),legend.position = "none")
+
+gtest0
+# the highest abundant ones are candiada, cladospori., aurobas.
+
+```
+
+genera_2020_2022_control
+
+```{r}
+genera_2020_2021 <- df_x
+genera_2020_2021$year_date <- paste(genera_2020_2021$year, "-", genera_2020_2021$event)
+genera_2020_2021$year_gt <- paste(genera_2020_2021$year, "-", genera_2020_2021$Genotype)
+genera_2020_2021$log_value <- paste(log2(genera_2020_2021$Value))
+genera_2020_2021[genera_2020_2021==0] <- NA
+genera_2020_2021<-genera_2020_2021[complete.cases(genera_2020_2021),]
+```
+
+all in one pie
+
+```{r}
+# # Aggregate values by 'Taxa' and calculate sums for each Value column year=type
+
+summarized_genera_all <- df_x %>% 
+  group_by(Taxa) %>%
+  summarize(all = sum(Value))
+
+
+genera_rep_all <- summarized_genera_all[order(-summarized_genera_all$all),]
+
+# see what wee have 
+gtest2 <- ggplot(data = genera_rep_all, aes(x= Taxa, y = all, fill = Taxa)) +
+  geom_bar(stat="identity", width=.5, position = "dodge")+
+    theme_minimal_hgrid() + xlab("Genera") + ylab("rel. abundance") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),legend.position = "right")
+gtest2
+
+gtest3<- ggplot(data = genera_rep_all, aes(x= Taxa, y = sort(all, decreasing = T), fill = Taxa)) +
+  geom_bar(stat="identity", width=.5, position = "dodge")+
+    theme_minimal_hgrid() + xlab("Genera") + ylab("rel. abundance") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),legend.position = "right")
+
+
+# https://stackoverflow.com/questions/50402217/how-can-i-normalize-each-column-value-by-the-sum-of-its-column-with-data-table-l
+genera_rep_all[,2] <- lapply(genera_rep_all[,2], function(x) x/sum(x))
+
+genera_melt_all <- melt(genera_rep_all, value.name = "rel_ab_all")
+head(genera_melt_all)
+```
+
+### fig 5c
+
+```{r}
+genera_melt_all$Taxa <- forcats::as_factor(genera_melt_all$Taxa)
+genera_melt_all_top_10 <- genera_melt_all[1:10,]
+genera_melt_all_top_10$Taxa <- factor(genera_melt_all_top_10$Taxa, levels = c("Aureobasidium","Candida","Cladosporium","Rachicladosporium","Calyptrozyma","Sporobolomyces" , "Curvularia","Kondoa","Exobasidium","Plenodomus"))
+
+barplot_all <- ggplot(data = genera_melt_all_top_10, aes(x= Taxa, y = rel_ab_all)) +
+  geom_bar(stat="identity", width=.5, position = "dodge", fill = NA, colour = black.transp)+
+  theme_minimal_grid() + xlab(NULL) + ylab(NULL) +
+  scale_y_continuous(expand = c(0,0))+
+  theme(axis.text.x = element_text(),legend.position = "none", legend.text	= element_text(size = 11), panel.grid = element_blank())
+
+
+barplot_all_flipped <- barplot_all + coord_flip()
+barplot_all_flipped
+```
+
+### fig.5d
+
+```{r}
+#| echo: false
+
+pie_df_gather$TrMo <- as.factor(pie_df_gather$TrMo)
+
+pie_s <- pie_df_gather %>% group_by(TrMo) %>% summarize(value = sum(value))
+                                                        
+gray_palette <- gray(seq(0.1, 1, length.out = 8))
+
+color_blind_palette <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#999999")
+
+color_blind_palette <- c("#0072B2", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#D55E00", "#CC79A7")
+
+color_palette <- c("#1f78b4", "#33a02c", "#e31a1c", "#ff7f00", "#6a3d9a", "#a6cee3", "#b2df8a")
+
+cbp1 <- c("#999999", "#E69F00", "#56B4E9", "#009E73",
+          "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+g_tm <- ggplot(data=pie_s, aes(x="", y=value, fill=TrMo)) +
+  geom_bar(stat = "identity", position = "stack", alpha = 0.7)+
+  # geom_bar(stat = "identity", width = 1) +
+  coord_polar(theta = "y", start = 0, clip = "off", direction = -1) + 
+  theme_void() +
+  scale_fill_manual(values = cbp1, name = "Trophic modes")+
+  theme(legend.position = "right",legend.title = element_text(size = 12)	, legend.text	= element_text(size = 12)) 
+  # geom_text(aes(label = TrMo), color = "white", size=6)
+g_tm 
+
+
+iii <- ggplot(data=pie_s, aes(x= "", y=value)) +
+geom_bar(stat = "identity", position = "stack",aes(fill = TrMo), alpha = 0.4) +
+    labs(x = NULL, y = "TrMo") +
+    coord_polar(theta = "y", start = 0, clip = "off", direction = -1) +
+    guides(fill = "none") + theme_void()
+
+```
+
+## fig 5.a-d
+
+```{r}
+# combined_plot_all_tax_tmode <- plot_grid(deter_taxa_flipped2, barplot_all_flipped, d,g_tm, labels = c("a", "b","c", "d"),nrow = 2, ncol = 2)
+# 
+# combined_plot_all_tax_tmode
+
+# patchwork_fig5v1 <- (deter_asv | dplot) / (barplot_all_flipped | g_tm)
+# 
+# patchwork_fig5v1 <- patchwork_fig5v1 + 
+#   plot_annotation(tag_levels = 'a') & 
+#   theme(plot.tag = element_text(size = 14)
+# ggsave("fig_4_pub_2024_03_16/fig_5v1.a-d_tax_tmode_patchwork.jpg",patchwork_fig5v1,dpi=300, bg = "white")
+
+# patchwork_fig5v2 <- (deter_asv | barplot_all_flipped) / (dplot | g_tm)
+# patchwork_fig5v2 <- (deter_asv | barplot_all_flipped) / (g_tm | dplot)
+patchwork_fig5v2 <- (dplot | barplot_all_flipped) / (g_tm | deter_asv)
+patchwork_fig5v2 <- (deter_asv | dplot) / (barplot_all_flipped | g_tm)
+
+# patchwork_fig5v2 <- (dplot | barplot_all_flipped) / (deter_asv | g_tm)
+
+# patchwork_fig5v2 <- deter_asv + barplot_all_flipped + g_tm + dplot
+# patchwork_fig5v2 <- deter_asv + barplot_all_flipped + dplot + g_tm
+# patchwork_fig5v2 <- deter_asv + dplot + barplot_all_flipped + g_tm
+# patchwork_fig5v2 <- dplot + barplot_all_flipped + g_tm + deter_asv
+
+ 
+patchwork_fig5v2 <- patchwork_fig5v2 + 
+  plot_annotation(tag_levels = 'a') & 
+  theme(plot.tag = element_text(size = 14))
+
+patchwork_fig5v2
+
+ggsave("fig_4_pub_2024_03_16/fig_5v2.a-d_tax_tmode_patchwork.tiff", patchwork_fig5v2, height=130,width=170,units="mm",dpi=300,type="cairo", device=tiff)
+# ggsave("fig_4_pub_2024_03_16/fig_5v2.a-d_tax_tmode_patchwork.png", patchwork_fig5v2, height=130,width=170,units="mm",dpi=300,type="cairo", device=png)
+
+combined_plot_all_tax_tmode <- plot_grid(deter_asv , dplot , barplot_all_flipped , g_tm, labels = c("a", "b","c", "d"),nrow = 2, ncol = 2)
+
+# combined_plot_all_tax_tmode <- plot_grid(deter_asv , barplot_all_flipped ,dplot  , g_tm, labels = c("a", "b","c", "d"),nrow = 2, ncol = 2)
+
+combined_plot_all_tax_tmode
+
+
+
+ggsave("fig_4_pub_2024_03_16/fig_5.a-d.tiff",combined_plot_all_tax_tmode, height=130,width=170,units="mm",dpi=300,type="cairo", device=tiff, bg = "white")
+ggsave("fig_4_pub_2024_03_16/fig_5.a-d.png",combined_plot_all_tax_tmode, height=130,width=170,units="mm",dpi=300,type="cairo", device=png)
+
+```
+
+**Treatment**
+
+```{r}
+# treatment 
+cat ("samples and asv in N0, n15, n150: ")
+
+asv_count_t0 <- subset(asv_count, metadata$Treatment=="Control")
+asv_count_t0 <- asv_count_t0[!colSums(asv_count_t0)==0]
+dim(asv_count_t0)
+
+asv_count_t15 <- subset(asv_count, metadata$Treatment=="N15")
+asv_count_t15 <- asv_count_t15[!colSums(asv_count_t15)==0]
+dim(asv_count_t15)
+
+asv_count_t150 <- subset(asv_count, metadata$Treatment=="N150")
+asv_count_t150 <- asv_count_t150[!colSums(asv_count_t150)==0]
+dim(asv_count_t150)
+
+```
+# Supplementary data & figures
+
+2.4.2 treatment effect
+
+```{r include=FALSE}
+#| echo: false
+
+# treatment 0:
+## seq based
+asv.t0.rarefaction<-specaccum(asv_count_t0, method="rarefaction")
+# hack specaccum object, to start at (0,0)
+asv.t0.rarefaction$sites <- c(0, asv.t0.rarefaction$sites)
+asv.t0.rarefaction$richness <- c(0, asv.t0.rarefaction$richness)
+asv.t0.rarefaction$sd <- c(0, asv.t0.rarefaction$sd)
+asv.t0.rarefaction$individuals <- c(0, asv.t0.rarefaction$individuals)
+
+# Sample-based ac curve scaled to the number of reads.
+asv.t0.cole<-specaccum(asv_count_t0, method="coleman")
+# hack specaccum object, to start at (0,0)
+asv.t0.cole$sites <- c(0, asv.t0.cole$sites)
+asv.t0.cole$richness <- c(0, asv.t0.cole$richness)
+asv.t0.cole$sd <- c(0, asv.t0.cole$sd)
+asv.t0.cole$individuals <- c(0, asv.t0.cole$individuals)
+
+# treatment 15:
+## seq based
+asv.t15.rarefaction<-specaccum(asv_count_t15, method="rarefaction")
+# hack specaccum object, to start at (0,0)
+asv.t15.rarefaction$sites <- c(0, asv.t15.rarefaction$sites)
+asv.t15.rarefaction$richness <- c(0, asv.t15.rarefaction$richness)
+asv.t15.rarefaction$sd <- c(0, asv.t15.rarefaction$sd)
+asv.t15.rarefaction$individuals <- c(0, asv.t15.rarefaction$individuals)
+
+# Sample-based valley accumulation curve scaled to the number of reads.
+asv.t15.cole<-specaccum(asv_count_t15, method="coleman")
+# hack specaccum object, to start at (0,0)
+asv.t15.cole$sites <- c(0, asv.t15.cole$sites)
+asv.t15.cole$richness <- c(0, asv.t15.cole$richness)
+asv.t15.cole$sd <- c(0, asv.t15.cole$sd)
+asv.t15.cole$individuals <- c(0, asv.t15.cole$individuals)
+
+# treatment 150:
+## seq based
+asv.t150.rarefaction<-specaccum(asv_count_t150, method="rarefaction")
+# hack specaccum object, to start at (0,0)
+asv.t150.rarefaction$sites <- c(0, asv.t150.rarefaction$sites)
+asv.t150.rarefaction$richness <- c(0, asv.t150.rarefaction$richness)
+asv.t150.rarefaction$sd <- c(0, asv.t150.rarefaction$sd)
+asv.t150.rarefaction$individuals <- c(0, asv.t150.rarefaction$individuals)
+
+# Sample-based mountain accumulation curve scaled to the number of reads.
+asv.t150.cole<-specaccum(asv_count_t150, method="coleman")
+# hack specaccum object, to start at (0,0)
+asv.t150.cole$sites <- c(0, asv.t150.cole$sites)
+asv.t150.cole$richness <- c(0, asv.t150.cole$richness)
+asv.t150.cole$sd <- c(0, asv.t150.cole$sd)
+asv.t150.cole$individuals <- c(0, asv.t150.cole$individuals)
+
+# combine data
+n <- max(length(asv.cole$richness), length(asv.t0.cole$richness), length(asv.t15.cole$richness),length(asv.t150.cole$richness))
+length(asv.t0.cole$richness) <- n
+length(asv.t0.rarefaction$individuals) <- n
+length(asv.t15.cole$richness) <- n
+length(asv.t15.rarefaction$individuals) <- n
+length(asv.t150.cole$richness) <- n
+length(asv.t150.rarefaction$individuals) <- n
+
+asv.combined_t <- rbind(asv.cole$richness, asv.rarefaction$individuals,asv.t0.cole$richness, asv.t0.rarefaction$individuals,asv.t15.cole$richness, asv.t15.rarefaction$individuals, asv.t150.cole$richness, asv.t150.rarefaction$individuals, deparse.level=2)
+```
+
+```{r warning=FALSE}
+#| echo: false
+
+asv.combi_t <- as.data.frame(asv.combined_t)
+
+asv.combi_t <- as.data.frame(t(asv.combi_t))
+
+
+t1 <- ggplot(asv.combi_t)+
+  #geom_point(aes(x = asv.combi_t[,2], y = asv.combi_t[,1]), size = 1) +
+  geom_point(aes(x = asv.combi_t[,4], y = asv.combi_t[,3]), size = 0.1, colour = "#808080") +
+  geom_point(aes(x = asv.combi_t[,6], y = asv.combi_t[,5]), size = 0.1, colour = green.transp_light) +
+  geom_point(aes(x = asv.combi_t[,8], y = asv.combi_t[,7]), size = 0.1, colour =  green.transp_dark) +
+  #geom_line(aes(x = asv.combi_t[,2], y = asv.combi_t[,1]), size = 0.5) +
+  geom_line(aes(x = asv.combi_t[,4], y = asv.combi_t[,3], col = "Control"), size = 0.5) +
+  geom_line(aes(x = asv.combi_t[,6], y = asv.combi_t[,5], col = "N15"), size = 0.5) +
+  geom_line(aes(x = asv.combi_t[,8], y = asv.combi_t[,7], col = "N150"), size = 0.5)+
+  theme_classic()+  #theme(axis.text.x= element_text(angle = 90,hjust=1,vjust=0.5))
+  labs(y = "ASV", x = "Reads") + theme(legend.position = "none")+  
+  scale_colour_manual(values = c("Control" = "#808080", "N15" = green.transp_light, "N150" = green.transp_dark), name = "Treatment") +
+    scale_x_continuous(breaks=seq(0e6,30e6,6e6), label=scientific)
+
+
+t1
+
+ggsave("fig_4_pub_2024_03_16/fig_S2a_rarefaction_curve_str-VS-non-str_Treatment.tiff", t1, bg = "white", height=60,width=170,units="mm",dpi=300,type="cairo", device=tiff)
+
+
+```
+## Figure S2
+### fig.S2 a-b
+
+```{r warning=FALSE}
+#| echo: false
+
+l <- ggplot(reads_sum_metadata, aes(x= factor(Treatment), y=`rowSums(asv_count)`,fill= Treatment)) +
+  geom_boxplot(outlier.size = 0.1) + theme_minimal() +
+  labs(x ="Treatments", y = "Reads")
+
+l + geom_dotplot(binaxis='y', stackdir='center')+ theme(legend.position = "top") +
+  scale_fill_manual(breaks = c("Control", "N15", "N150"), values = c("#808080", green.transp_light, green.transp_dark), name = "Treatment")
+
+
+t2 <- ggplot(reads_sum_metadata, aes(x= factor(Treatment), y=`rowSums(asv_count)`,fill= Treatment)) + 
+  geom_boxplot(outlier.size = 0.2) + theme_classic() + 
+  labs(x ="Treatment", y = "Reads") +
+  theme(legend.position = "right") + 
+  scale_fill_manual(breaks = c("Control", "N15", "N150"), values = c("#808080", green.transp_light,green.transp_dark), name = "Treatment") +
+  scale_y_continuous(breaks=seq(0e6,1e6,0.25e6), label=scientific)
+
+
+combined_plot_t <- plot_grid(t1 , t2, labels = c("a","b"))
+combined_plot_t
+
+
+ggsave("fig_4_pub_2024_03_16/fig_S2ab.tiff", combined_plot_t, bg = "white" , height=60,width=170,units="mm",dpi=300,type="cairo", device=tiff )
+
+```
+
+anova test
+
+```{r}
+# One-way ANOVA
+res.aov <- reads_sum_metadata_no_whole_outlier %>% anova_test(`rowSums(asv_count)` ~ Treatment)
+res.aov
+
+# Pairwise comparisons
+pwc <- reads_sum_metadata_no_whole_outlier %>% tukey_hsd(`rowSums(asv_count)` ~ Treatment)
+pwc
+```
+
+######################### 
+
+############################# 
+
+STERILIZATION vs NON-STERILIZATION
+
+1.  sterilization effect
+
+upload Strerile VS unsterile analysis part
+
+```{r green col}
+green.transp_light<-adjustcolor("green4", alpha.f=0.15)
+
+green.transp_norm<-adjustcolor("green4", alpha.f=0.5)
+
+green.transp_dark<-adjustcolor("green4", alpha.f=1)
+
+```
+
+1.1. ASV table 1.1.1 counts data
+
+```{r include=FALSE}
+#| echo: false
+asv_count_st_vs_nst_raw <- read_delim("path/to/supp_asv_or_feature_table/feature-table.tsv", delim = "\t", escape_double = FALSE, col_names = TRUE, trim_ws = TRUE, skip = 1)
+
+asv_count_st_vs_nst <- asv_count_st_vs_nst_raw[,2:32]
+rownames(asv_count_st_vs_nst) <- asv_count_st_vs_nst_raw$`#OTU ID`
+asv_count_st_vs_nst <- as.data.frame(t(asv_count_st_vs_nst))
+cat ("Total str and non-str samples: ")
+dim(asv_count_st_vs_nst)
+```
+
+```{r }
+cat ("Total str and non-str reads: ")
+sum(asv_count_st_vs_nst)
+```
+
+1.2. metadata
+
+```{r include=FALSE}
+#| echo: false
+metadata_raw_st_vs_nst <- read_delim("path/to/supplymentary_metadata/metadata_new1_str_vs_nonstr.txt", delim = "\t", escape_double = FALSE, trim_ws = TRUE)
+
+metadata1_st_vs_nst <- as.data.frame(metadata_raw_st_vs_nst)
+metadata1_st_vs_nst <- metadata1_st_vs_nst[order(metadata1_st_vs_nst$sampleID),]
+rownames(metadata1_st_vs_nst) <- metadata1_st_vs_nst$sampleID
+metadata1_st_vs_nst <- subset(metadata1_st_vs_nst, rownames(metadata1_st_vs_nst) %in% rownames(asv_count_st_vs_nst)) # subset to make the data equal
+
+metadata_st_vs_nst <- metadata1_st_vs_nst[,4:40]
+rownames(metadata_st_vs_nst) <- metadata1_st_vs_nst$sampleID
+metadata_st_vs_nst <- as.data.frame(metadata_st_vs_nst)
+```
+
+```{r}
+dim(metadata_st_vs_nst)
+head(metadata_st_vs_nst)
+```
+
+2.  subsets
+
+2.1. count data
+
+```{r}
+# status
+cat ("samples and asv in sterilezed and non-strelized: ")
+asv_count_steri <- subset(asv_count_st_vs_nst, metadata_st_vs_nst$Sterilized_Status=="Sterilized")
+dim(asv_count_steri)
+asv_count_steri <- asv_count_steri[!colSums(asv_count_steri)==0]
+dim(asv_count_steri)
+```
+
+non zero counts
+
+```{r}
+asv_count_non_steri <- subset(asv_count_st_vs_nst, metadata_st_vs_nst$Sterilized_Status=="Non_sterilized")
+dim(asv_count_non_steri)
+asv_count_non_steri <- asv_count_non_steri[!colSums(asv_count_non_steri)==0]
+dim(asv_count_non_steri)
+```
+
+```{r}
+# treatment 
+cat ("samples and asv in N0, n15, n150: ")
+
+asv_count_st_vs_nst_t0 <- subset(asv_count_st_vs_nst, metadata_st_vs_nst$Treatment=="Control")
+asv_count_st_vs_nst_t0 <- asv_count_st_vs_nst_t0[!colSums(asv_count_st_vs_nst_t0)==0]
+dim(asv_count_st_vs_nst_t0)
+
+asv_count_st_vs_nst_t15 <- subset(asv_count_st_vs_nst, metadata_st_vs_nst$Treatment=="N15")
+asv_count_st_vs_nst_t15 <- asv_count_st_vs_nst_t15[!colSums(asv_count_st_vs_nst_t15)==0]
+dim(asv_count_st_vs_nst_t15)
+
+asv_count_st_vs_nst_t150 <- subset(asv_count_st_vs_nst, metadata_st_vs_nst$Treatment=="N150")
+asv_count_st_vs_nst_t150 <- asv_count_st_vs_nst_t150[!colSums(asv_count_st_vs_nst_t150)==0]
+dim(asv_count_st_vs_nst_t150)
+```
+
+```{r}
+# metadata_st_vs_nst
+metadata_steri <- subset (metadata_st_vs_nst, metadata_st_vs_nst$Sterilized_Status=="Sterilized")
+metadata_non_steri <- subset (metadata_st_vs_nst, metadata_st_vs_nst$Sterilized_Status=="Non_sterilized")
+```
+
+2.2. sampling depth
+
+```{r}
+cat ("reads per samples: ")
+
+reads_sum <- as.data.frame(rowSums(asv_count_st_vs_nst))
+reads_sum[order(row.names(reads_sum)),]
+reads_sum <- subset(reads_sum, row.names(reads_sum) %in% row.names(metadata_st_vs_nst))
+
+reads_sum_metadata_st_vs_nst <- merge(reads_sum, metadata_st_vs_nst, by = "row.names") # https://docs.tibco.com/pub/enterprise-runtime-for-R/4.3.0/doc/html/Language_Reference/base/merge.html
+rownames(reads_sum_metadata_st_vs_nst) <- reads_sum_metadata_st_vs_nst[,1]
+reads_sum_metadata_st_vs_nst$Row.names <- as.character(reads_sum_metadata_st_vs_nst$Row.names) # make it character
+reads_sum_metadata_st_vs_nst <- as.data.frame(reads_sum_metadata_st_vs_nst)
+```
+
+2.3 tests
+
+```{r}
+## 1. Comparing sequencing depth between sterilzed and non sterilized
+my_samples <- as.data.frame(reads_sum_metadata_st_vs_nst[-15,])
+my_data <- my_samples[order(my_samples$SwAsP_ID),]
+my_data <- my_data [,c(2,4,8,11)]
+my_data <- my_data[order(my_data$Sterilized_Status),]
+
+my_data$`rowSums(asv_count_st_vs_nst)`
+
+non_sterilized <- c(23729, 57983,  43651 , 22644 , 81039,  59534 , 80591 , 92710 , 72523,  69289,  77025, 102026,
+            105204,  91195 , 54645)
+
+sterilized <- c(73933,  80112 , 78990 , 69573,82485 , 67326 , 66270 , 76308 , 71651 , 91628 ,110843 , 71136 ,
+            112731  ,65206 , 56623)
+
+my_data <- data.frame( 
+  status = rep(c("non_sterilized", "sterilized"), each = 15),
+  sum_reads = c(non_sterilized,  sterilized)
+)
+
+# t test
+t.test(my_data$sum_reads ~ my_data$status, paired = TRUE) # no significant difference 
+
+
+summary(my_data)
+```
+
+
+2.4 Accumulation curves
+
+2.4.1 Status asv count data
+
+```{r warning=FALSE}
+#| echo: false
+
+# Sequence-based asv sac:
+asv.rarefaction<-specaccum(asv_count_st_vs_nst, method="rarefaction")
+# hack specaccum object, to start at (0,0)
+asv.rarefaction$sites <- c(0, asv.rarefaction$sites)
+asv.rarefaction$richness <- c(0, asv.rarefaction$richness)
+asv.rarefaction$sd <- c(0, asv.rarefaction$sd)
+asv.rarefaction$individuals <- c(0, asv.rarefaction$individuals)
+
+# Sample-based accumulation curve scaled to the number of reads.
+asv.cole<-specaccum(asv_count_st_vs_nst, method="coleman")
+# hack specaccum object, to start at (0,0)
+asv.cole$sites <- c(0, asv.cole$sites)
+asv.cole$richness <- c(0, asv.cole$richness)
+asv.cole$sd <- c(0, asv.cole$sd)
+asv.cole$individuals <- c(0, asv.cole$individuals)
+
+# Sequence-based steril asv sac:
+asv.steril.rarefaction<-specaccum(asv_count_steri, method="rarefaction")
+# hack specaccum object, to start at (0,0)
+asv.steril.rarefaction$sites <- c(0, asv.steril.rarefaction$sites)
+asv.steril.rarefaction$richness <- c(0, asv.steril.rarefaction$richness)
+asv.steril.rarefaction$sd <- c(0, asv.steril.rarefaction$sd)
+asv.steril.rarefaction$individuals <- c(0, asv.steril.rarefaction$individuals)
+
+# Sample-based steril accumulation curve scaled to the number of reads.
+asv.steril.cole<-specaccum(asv_count_steri, method="coleman")
+# hack specaccum object, to start at (0,0)
+asv.steril.cole$sites <- c(0, asv.steril.cole$sites)
+asv.steril.cole$richness <- c(0, asv.steril.cole$richness)
+asv.steril.cole$sd <- c(0, asv.steril.cole$sd)
+asv.steril.cole$individuals <- c(0, asv.steril.cole$individuals)
+
+# Sequence-based nonsteril asv sac:
+asv.nonsteril.rarefaction<-specaccum(asv_count_non_steri, method="rarefaction")
+# hack specaccum object, to start at (0,0)
+asv.nonsteril.rarefaction$sites <- c(0, asv.nonsteril.rarefaction$sites)
+asv.nonsteril.rarefaction$richness <- c(0, asv.nonsteril.rarefaction$richness)
+asv.nonsteril.rarefaction$sd <- c(0, asv.nonsteril.rarefaction$sd)
+asv.nonsteril.rarefaction$individuals <- c(0, asv.nonsteril.rarefaction$individuals)
+
+# Sample-based nonsteril accumulation curve scaled to the number of reads.
+asv.nonsteril.cole<-specaccum(asv_count_non_steri, method="coleman")
+# hack specaccum object, to start at (0,0)
+asv.nonsteril.cole$sites <- c(0, asv.nonsteril.cole$sites)
+asv.nonsteril.cole$richness <- c(0, asv.nonsteril.cole$richness)
+asv.nonsteril.cole$sd <- c(0, asv.nonsteril.cole$sd)
+asv.nonsteril.cole$individuals <- c(0, asv.nonsteril.cole$individuals)
+
+# combine data
+n <- max(length(asv.cole$richness), length(asv.steril.cole$richness), length(asv.nonsteril.cole$richness))
+#length(asv.cole$richness) <- n
+#length(asv.rarefaction$individuals) <- n
+length(asv.steril.cole$richness) <- n
+length(asv.steril.rarefaction$individuals) <- n
+length(asv.nonsteril.cole$richness) <- n
+length(asv.nonsteril.rarefaction$individuals) <- n
+
+asv.combined_st <-rbind(asv.cole$richness, asv.rarefaction$individuals,asv.steril.cole$richness, asv.steril.rarefaction$individuals,asv.nonsteril.cole$richness, asv.nonsteril.rarefaction$individuals, deparse.level=2)
+```
+
+fig. s1.a
+```{r warning=FALSE}
+#| echo: false
+
+asv.combi <- as.data.frame(asv.combined_st)
+
+asv.combi <- as.data.frame(t(asv.combi))
+
+s1<- ggplot(asv.combi)+
+  #geom_point(aes(x = asv.combi[,2], y = asv.combi[,1]), size = 1) +
+  geom_point(aes(x = asv.combi[,4], y = asv.combi[,3]), size = 1, colour = "#00BFC4" ) +
+  geom_point(aes(x = asv.combi[,6], y = asv.combi[,5]), size = 1, colour = "#F8766D") +
+  #geom_line(aes(x = asv.combi[,2], y = asv.combi[,1]), size = 0.5) +
+  geom_line(aes(x = asv.combi[,4], y = asv.combi[,3], col = "sterilized"), size = 0.5) +
+  geom_line(aes(x = asv.combi[,6], y = asv.combi[,5], col = "unsterilized"), size = 0.5)+
+  theme_classic()+ #theme(axis.text.x= element_text(angle = 90,hjust=1,vjust=0.5))+
+  labs(y = "ASV", x = "Reads") +
+  theme(legend.position = "none") + 
+  scale_colour_manual(values = c("sterilized" = "#00BFC4", "unsterilized" = "#F8766D"),name = "Sterilization") +
+      scale_x_continuous(breaks=seq(0e6,1.5e6,0.5e6), label=scientific)
+
+
+s1
+
+ggsave("fig_4_pub_2024_03_16/fig_S1a_rarefaction_curve_str-VS-non-str.tiff", s1, bg = "white", height=60,width=170,units="mm",dpi=300,type="cairo", device=tiff)
+```
+
+## Figure S1
+### fig. s1 a-b
+
+```{r warning=FALSE}
+#| echo: false
+
+l <- ggplot(reads_sum_metadata_st_vs_nst, aes(x= factor(Sterilized_Status, labels =c( "Unsterilized", "Sterilized")), y=`rowSums(asv_count_st_vs_nst)`,fill= Sterilized_Status)) + 
+  geom_boxplot(outlier.size = 0.2) + theme_classic() + 
+  labs(x ="Leaf status", y = "Reads") 
+
+s2 <- l + geom_dotplot(binaxis='y', stackdir='center', dotsize=0.2)+ theme(legend.position = "right") 
+s2 
+s3 <- s2 + scale_y_continuous(breaks=seq(0e5,3e5,0.25e5), label=scientific) +
+  scale_fill_discrete(labels = c("Unsterilized", "Sterilized"))
+
+s3 
+
+# combined_plot_s <- plot_grid(s1 , s3, labels = c("a","b"))
+# combined_plot_s
+
+patchwork_fig_s1ab <- s1 + s3
+patchwork_fig_s1ab
+ggsave("fig_4_pub_2024_03_16/fig_S1ab.tiff", bg = "white", height=60,width=170,units="mm",dpi=300,type="cairo", device=tiff)
+
+```
+
+to run entire script: run this command from console: quarto_render("path/qmd_file.qmd")
+
+# R Session info
+
+```{r}
+#| echo: false
+
+sessionInfo()
+```
+
+--------------------- The End :) --------------------
