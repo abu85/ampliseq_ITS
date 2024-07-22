@@ -350,10 +350,71 @@ nf-core/ampliseq \ # calling ampliseq pipeline
 
 Real run used in the paper
 ```
-nextflow run nf-core/ampliseq --input /proj/snic2022-22-289/nobackup/abu/ampliseq_its/input_files -profile uppmax --max_cpus 20 --max_memory 36.GB --project snic2022-22-289 --FW_primer GCATCGATGAAGAACGCAGC --RV_primer TCCTCCGCTTATTGATATGC --dada_ref_taxonomy unite-fungi --cut_dada_ref_taxonomy --qiime_ref_taxonomy unite-fungi --email abu.siddique@slu.se --metadata /proj/snic2022-22-289/nobackup/abu/ampliseq_its/samplesheet.tsv --cut_its its2 --illumina_pe_its --trunclenf 223 --trunclenr 162 --exclude_taxa "mitochondria,chloroplast,archea,bacteria" --min_frequency 1 --min_samples 1 -bg -resume --outdir /proj/snic2022-22-289/nobackup/abu/ampliseq_its/real_run/results --ignore_empty_input_files --skip_ancom --ignore_failed_trimming > amplseq_real_run_full_log_x.txt
+nextflow run nf-core/ampliseq --input /proj/snic2022-22-289/nobackup/abu/ampliseq_its/input_files -profile uppmax --max_cpus 20 --max_memory 36.GB --project naiss2024-22-116 --FW_primer GCATCGATGAAGAACGCAGC --RV_primer TCCTCCGCTTATTGATATGC --dada_ref_taxonomy unite-fungi --cut_dada_ref_taxonomy --qiime_ref_taxonomy unite-fungi --email abu.siddique@slu.se --metadata /proj/snic2022-22-289/nobackup/abu/ampliseq_its/samplesheet.tsv --cut_its its2 --illumina_pe_its --trunclenf 223 --trunclenr 162 --exclude_taxa "mitochondria,chloroplast,archea,bacteria" --min_frequency 1 --min_samples 1 -bg -resume --outdir /proj/snic2022-22-289/nobackup/abu/ampliseq_its/real_run/results --ignore_empty_input_files --skip_ancom --ignore_failed_trimming > amplseq_real_run_full_log_x.txt
 ```
 
 
 ##### Take result folders and do downstream analysis in R 
 
 rest of the analysis was done with R in Rstudio *see the `r_analysis_script.qmd` script* 
+
+
+
+
+# rarefy raw reads
+
+1st Qu.: 68017  
+
+or
+
+reads 12300
+
+
+go /home/abusiddi/SLUBI/scripts
+
+nano subsample.sh
+
+chmod +x subsample.sh
+
+file content
+```
+#!/bin/bash
+#SBATCH -A naiss2024-22-116
+#SBATCH -p core -n 2
+#SBATCH -t 72:00:00
+#SBATCH -J subsample
+#SBATCH --mail-user=abu.siddique@slu.se
+#SBATCH --mail-type=ALL
+
+module load bioinfo-tools
+
+echo "sybsampling job started at $(date)"
+
+INPUT_DIR="/proj/uppstore2018171/abu/tanasp/P22702/01-Ampliseq-Analysis/input/"
+OUTPUT_DIR="/proj/uppstore2018171/abu/tanasp/P22702/01-Ampliseq-Analysis/subsampled/"
+READS=12300
+
+mkdir -p $OUTPUT_DIR
+
+for file in $INPUT_DIR/*_R1_001.fastq.gz; do
+    base=$(basename $file _R1_001.fastq.gz)
+    r1_file=$file
+    r2_file=${INPUT_DIR}/${base}_R2_001.fastq.gz
+
+    if [ -f $r2_file ]; then
+        total_reads=$(zcat $r1_file | echo $((`wc -l`/4)))
+        if [ $total_reads -ge $READS ]; then
+            seqtk sample -s100 $r1_file $READS > ${OUTPUT_DIR}/${base}_R1_001.fastq.gz
+            seqtk sample -s100 $r2_file $READS > ${OUTPUT_DIR}/${base}_R2_001.fastq.gz
+            echo "Subsampled $r1_file and $r2_file to ${READS} reads each."
+        else
+            echo "Skipped $base as it has fewer than $READS reads."
+        fi
+    else
+        echo "Paired file for $r1_file not found. Skipping."
+    fi
+done
+
+echo "sybsampling job finished at $(date)"
+```
+
