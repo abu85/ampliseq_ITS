@@ -418,3 +418,36 @@ done
 echo "sybsampling job finished at $(date)"
 ```
 
+
+
+
+{
+    "input_folder": "path\/to\/samplesheet.tsv",
+    "FW_primer": "GCATCGATGAAGAACGCAGC",
+    "RV_primer": "TCCTCCGCTTATTGATATGC",
+    "metadata": "path\/to\/metadata.tsv",
+    "outdir": "results",
+    "save_intermediates": true,
+    "email": "abu.siddique@slu.se",
+    "illumina_pe_its": true,
+    "ignore_empty_input_files": true,
+    "trunclenf": 223,
+    "trunclenr": 162,
+    "ignore_failed_filtering": true,
+    "sample_inference": "pooled",
+    "vsearch_cluster": true,
+    "filter_ssu": "bac,arc,mito,euk",
+    "dada_ref_taxonomy": "unite-fungi=9.0",
+    "dada_addspecies_allowmultiple": true,
+    "dada_taxonomy_rc": true,
+    "qiime_ref_taxonomy": "unite-fungi=8.3",
+    "addsh": true,
+    "cut_its": "its2",
+    "exclude_taxa": "mitochondria,chloroplast,archaea",
+    "sbdiexport": true,
+    "diversity_rarefaction_depth": 10000
+}
+
+Then, launch Nextflow with the following command:
+
+nextflow run nf-core/ampliseq -r 2.10.0 -profile uppmax -params-file nf-params.json
