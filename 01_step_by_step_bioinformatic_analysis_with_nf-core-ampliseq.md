@@ -363,11 +363,7 @@ rest of the analysis was done with R in Rstudio *see the `r_analysis_script.qmd`
 
 # rarefy raw reads
 
-1st Qu.: 68017  
-
-or
-
-reads 12300
+with reads limit 12300
 
 
 go /home/abusiddi/SLUBI/scripts
@@ -418,6 +414,58 @@ done
 echo "sybsampling job finished at $(date)"
 ```
 
+now with reads limit 1st Qu.: 68017  
+`sbatch subsample_v2.sh`
+
+done
+
+
+# Extract sampleID from sample_sheet_v1.csv
+cut -f1 /home/abusiddi/SLUBI/scripts/sample_sheet_v1.csv > /home/abusiddi/SLUBI/scripts/sample_sheet_ids.txt
+# Extract sampleID from metadata_2024_07_22.txt (assuming it's a tab-delimited file)
+cut -f1 /home/abusiddi/SLUBI/scripts/metadata_2024_07_22.txt > /home/abusiddi/SLUBI/scripts/metadata_ids.txt
+# Find common sample IDs
+comm -12 <(sort /home/abusiddi/SLUBI/scripts/sample_sheet_ids.txt) <(sort /home/abusiddi/SLUBI/scripts/metadata_ids.txt) > /home/abusiddi/SLUBI/scripts/common_ids.txt
+# Filter sample_sheet_v1.csv based on common sample IDs
+awk 'NR==FNR{a[$1]; next} FNR==1 || $1 in a' /home/abusiddi/SLUBI/scripts/common_ids.txt /home/abusiddi/SLUBI/scripts/sample_sheet_v1.csv > /home/abusiddi/SLUBI/scripts/sub_sample_sheet_v1.csv
+# Filter metadata_2024_07_22.txt based on common sample IDs
+awk 'NR==FNR{a[$1]; next} FNR==1 || $1 in a' /home/abusiddi/SLUBI/scripts/common_ids.txt /home/abusiddi/SLUBI/scripts/metadata_2024_07_22.txt > /home/abusiddi/SLUBI/scripts/sub_metadata_2024_07_22.txt
+
+
+## nxf
+### 1.2. Background or Tmux set up 
+```
+module load tmux # loading the tmux module
+tmux new -s ampliseq_its # or any other name you like
+```
+just to reconnect to UPPMAX and do
+####### module load tmux
+####### tmux attach -t ampliseq_its
+
+```
+tmux set mouse on  # enable mouse support for things like scrolling and selecting text
+```
+
+##### 2. Nextflow setup (Nextflow	21.10.6)
+Installation
+```
+module load uppmax bioinfo-tools Nextflow
+```
+
+# Don't let Java get carried away and use huge amounts of memory
+```
+export NXF_OPTS='-Xms1g -Xmx4g'
+export NXF_HOME=/proj/uppstore2018171/abu/tanasp/nxf_analysis/
+export NXF_TEMP=${SNIC_TMP:-$HOME/glob/nxftmp}
+```
+
+
+# run 1
+nextflow run nf-core/ampliseq -r 2.3.2 --input /home/abusiddi/SLUBI/scripts/sub_sample_sheet_v1.csv -profile uppmax --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --FW_primer GCATCGATGAAGAACGCAGC --RV_primer TCCTCCGCTTATTGATATGC --dada_ref_taxonomy unite-fungi --cut_dada_ref_taxonomy --qiime_ref_taxonomy unite-fungi --email abu.siddique@slu.se --metadata /home/abusiddi/SLUBI/scripts/sub_metadata_2024_07_22.txt --cut_its its2 --illumina_pe_its --trunclenf 223 --trunclenr 162 --exclude_taxa mitochondria,chloroplast,archea,bacteria --min_frequency 5 --min_samples 2 -bg --outdir /proj/uppstore2018171/abu/tanasp/nxf_analysis/results_2024_07_23 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality > log1.txt
+
+# run 2
+nextflow run nf-core/ampliseq -r 2.3.2 --input /home/abusiddi/SLUBI/scripts/sub_sample_sheet_v1.csv -profile uppmax --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --FW_primer GCATCGATGAAGAACGCAGC --RV_primer TCCTCCGCTTATTGATATGC --dada_ref_taxonomy unite-fungi --cut_dada_ref_taxonomy --qiime_ref_taxonomy unite-fungi --email abu.siddique@slu.se --metadata /home/abusiddi/SLUBI/scripts/sub_metadata_2024_07_22.txt --cut_its its2 --illumina_pe_its --trunclenf 223 --trunclenr 162 --exclude_taxa mitochondria,chloroplast,archea,bacteria --min_frequency 5 --min_samples 2 -bg -resume --outdir /proj/uppstore2018171/abu/tanasp/nxf_analysis/results_2024_07_23 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality > log2.txt
+
 
 
 
@@ -451,3 +499,7 @@ echo "sybsampling job finished at $(date)"
 Then, launch Nextflow with the following command:
 
 nextflow run nf-core/ampliseq -r 2.10.0 -profile uppmax -params-file nf-params.json
+
+
+
+
