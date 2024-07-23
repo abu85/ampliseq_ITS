@@ -464,17 +464,40 @@ export NXF_TEMP=${SNIC_TMP:-$HOME/glob/nxftmp}
 nextflow run nf-core/ampliseq -r 2.3.2 --input /home/abusiddi/SLUBI/scripts/sub_sample_sheet_v1.csv -profile uppmax --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --FW_primer GCATCGATGAAGAACGCAGC --RV_primer TCCTCCGCTTATTGATATGC --dada_ref_taxonomy unite-fungi --cut_dada_ref_taxonomy --qiime_ref_taxonomy unite-fungi --email abu.siddique@slu.se --metadata /home/abusiddi/SLUBI/scripts/sub_metadata_2024_07_22.txt --cut_its its2 --illumina_pe_its --trunclenf 223 --trunclenr 162 --exclude_taxa mitochondria,chloroplast,archea,bacteria --min_frequency 5 --min_samples 2 -bg --outdir /proj/uppstore2018171/abu/tanasp/nxf_analysis/results_2024_07_23 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality > log1.txt
 
 # run 2
-nextflow run nf-core/ampliseq -r 2.3.2 --input /home/abusiddi/SLUBI/scripts/sub_sample_sheet_v1.csv -profile uppmax --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --FW_primer GCATCGATGAAGAACGCAGC --RV_primer TCCTCCGCTTATTGATATGC --dada_ref_taxonomy unite-fungi --cut_dada_ref_taxonomy --qiime_ref_taxonomy unite-fungi --email abu.siddique@slu.se --metadata /home/abusiddi/SLUBI/scripts/sub_metadata_2024_07_22.txt --cut_its its2 --illumina_pe_its --trunclenf 223 --trunclenr 162 --exclude_taxa mitochondria,chloroplast,archea,bacteria --min_frequency 5 --min_samples 2 -bg -resume --outdir /proj/uppstore2018171/abu/tanasp/nxf_analysis/results_2024_07_23 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality > log2.txt
+nextflow run nf-core/ampliseq -r 2.3.2 --input /home/abusiddi/SLUBI/scripts/sub_sample_sheet_v1.csv -profile uppmax --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --FW_primer "GCATCGATGAAGAACGCAGC" --RV_primer "TCCTCCGCTTATTGATATGC" --dada_ref_taxonomy unite-fungi --cut_dada_ref_taxonomy --qiime_ref_taxonomy unite-fungi --email abu.siddique@slu.se --metadata /home/abusiddi/SLUBI/scripts/sub_metadata_2024_07_22.txt --cut_its its2 --illumina_pe_its --trunclenf 223 --trunclenr 162 --exclude_taxa mitochondria,chloroplast,archea,bacteria --min_frequency 5 --min_samples 2 -bg -resume --outdir /proj/uppstore2018171/abu/tanasp/nxf_analysis/results_2024_07_23 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality > log2.txt
 
+/proj/naiss2023-23-270/nobackup/nxf/tanasp/
 
+# run 3
 
+# Don't let Java get carried away and use huge amounts of memory
+```
+export NXF_OPTS='-Xms1g -Xmx4g'
+export NXF_HOME=/proj/naiss2023-23-270/nobackup/nxf/tanasp/
+export NXF_TEMP=${SNIC_TMP:-$HOME/glob/nxftmp}
+```
+
+nextflow run nf-core/ampliseq -r 2.3.2 --input /home/abusiddi/SLUBI/scripts/sub_sample_sheet_v1.csv -profile uppmax --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --FW_primer "GCATCGATGAAGAACGCAGC" --RV_primer "TCCTCCGCTTATTGATATGC" --dada_ref_taxonomy unite-fungi --cut_dada_ref_taxonomy --qiime_ref_taxonomy unite-fungi --email abu.siddique@slu.se --metadata /home/abusiddi/SLUBI/scripts/sub_metadata_2024_07_22.txt --cut_its its2 --illumina_pe_its --trunclenf 223 --trunclenr 162 --exclude_taxa mitochondria,chloroplast,archea,bacteria --min_frequency 5 --min_samples 2 -bg -resume --outdir /proj/uppstore2018171/abu/tanasp/nxf_analysis/results_2024_07_23 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality > log3.txt
+
+-r 2.10.0
+
+# run4
+nextflow run nf-core/ampliseq -r 2.10.0 --input /home/abusiddi/SLUBI/scripts/sub_sample_sheet_v1.csv -profile uppmax --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --FW_primer "GCATCGATGAAGAACGCAGC" --RV_primer "TCCTCCGCTTATTGATATGC" --dada_ref_taxonomy unite-fungi --cut_dada_ref_taxonomy --qiime_ref_taxonomy unite-fungi --email abu.siddique@slu.se --metadata /home/abusiddi/SLUBI/scripts/sub_metadata_2024_07_22.txt --cut_its its2 --illumina_pe_its --trunclenf 223 --trunclenr 162 --exclude_taxa mitochondria,chloroplast,archea,bacteria --min_frequency 5 --min_samples 2 -bg -resume --outdir /proj/uppstore2018171/abu/tanasp/nxf_analysis/results_2024_07_23 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality > log4.txt
+
+# run5
+nextflow run nf-core/ampliseq -r 2.10.0 --input /home/abusiddi/SLUBI/scripts/sub_sample_sheet_v1.tsv -profile uppmax --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --FW_primer "GCATCGATGAAGAACGCAGC" --RV_primer "TCCTCCGCTTATTGATATGC" --dada_ref_taxonomy unite-fungi --cut_dada_ref_taxonomy --qiime_ref_taxonomy unite-fungi --email abu.siddique@slu.se --metadata /home/abusiddi/SLUBI/scripts/sub_metadata_2024_07_22.tsv --cut_its its2 --illumina_pe_its --trunclenf 223 --trunclenr 162 --exclude_taxa mitochondria,chloroplast,archea,bacteria --min_frequency 5 --min_samples 2 -bg -resume --outdir /proj/uppstore2018171/abu/tanasp/nxf_analysis/results_2024_07_23 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality > log5.txt
+
+# run6
+nextflow run nf-core/ampliseq -r 2.10.0 --input /home/abusiddi/SLUBI/scripts/sub_sample_sheet_v1.tsv -profile uppmax --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --FW_primer "GCATCGATGAAGAACGCAGC" --RV_primer "TCCTCCGCTTATTGATATGC" --dada_ref_taxonomy "unite-fungi=9.0" --cut_dada_ref_taxonomy --qiime_ref_taxonomy unite-fungi --email abu.siddique@slu.se --metadata /home/abusiddi/SLUBI/scripts/sub_metadata_2024_07_22.tsv --cut_its its2 --illumina_pe_its --trunclenf 223 --trunclenr 162 --exclude_taxa mitochondria,chloroplast,archea,bacteria --min_frequency 5 --min_samples 2 -bg -resume --outdir /proj/uppstore2018171/abu/tanasp/nxf_analysis/results_2024_07_23 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality > log6.txt
+
+unite-fungi=9.0
 
 {
-    "input_folder": "path\/to\/samplesheet.tsv",
+    "input_folder": "/home/abusiddi/SLUBI/scripts/sub_sample_sheet_v1.tsv",
     "FW_primer": "GCATCGATGAAGAACGCAGC",
     "RV_primer": "TCCTCCGCTTATTGATATGC",
-    "metadata": "path\/to\/metadata.tsv",
-    "outdir": "results",
+    "metadata": "/home/abusiddi/SLUBI/scripts/sub_metadata_2024_07_22.tsv",
+    "outdir": "results_2024_07_23_v2",
     "save_intermediates": true,
     "email": "abu.siddique@slu.se",
     "illumina_pe_its": true,
@@ -491,14 +514,36 @@ nextflow run nf-core/ampliseq -r 2.3.2 --input /home/abusiddi/SLUBI/scripts/sub_
     "qiime_ref_taxonomy": "unite-fungi=8.3",
     "addsh": true,
     "cut_its": "its2",
-    "exclude_taxa": "mitochondria,chloroplast,archaea",
+    "exclude_taxa": "mitochondria,chloroplast,archaea,bacteria",
     "sbdiexport": true,
-    "diversity_rarefaction_depth": 10000
+    "diversity_rarefaction_depth": 12000
 }
 
 Then, launch Nextflow with the following command:
 
-nextflow run nf-core/ampliseq -r 2.10.0 -profile uppmax -params-file nf-params.json
+# run7
+nextflow run nf-core/ampliseq -r 2.10.0 -profile uppmax -params-file /home/abusiddi/SLUBI/scripts/nf-params.json --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --min_frequency 5 --min_samples 2 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality -bg -work-dir "./work2" > log7.txt
+
+# run8
+nextflow run nf-core/ampliseq -r 2.10.0 -profile uppmax -params-file /home/abusiddi/SLUBI/scripts/nf-params.json --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --min_frequency 5 --min_samples 2 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality -bg -work-dir "./work2" > log8.txt
+
+# run9
+nextflow run nf-core/ampliseq -r 2.10.0 -profile uppmax -params-file /home/abusiddi/SLUBI/scripts/nf-params.json --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --min_frequency 5 --min_samples 2 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality -bg -work-dir "./work2" -resume > log9.txt
+
+
+--skip_dada_taxonomy
+# run10
+nextflow run nf-core/ampliseq -r 2.10.0 -profile uppmax -params-file /home/abusiddi/SLUBI/scripts/nf-params.json --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --min_frequency 5 --min_samples 2 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality -bg -work-dir "./work2" -resume --skip_dada_taxonomy > log10.txt
+
+
+--skip_taxonomy
+# run11
+nextflow run nf-core/ampliseq -r 2.10.0 -profile uppmax -params-file /home/abusiddi/SLUBI/scripts/nf-params.json --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --min_frequency 5 --min_samples 2 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality -bg -work-dir "./work2" -resume --skip_taxonomy > log11.txt
+
+Incompatible parameters: `--sbdiexport` expects taxa annotation and therefore excludes `--skip_taxonomy`.
+# run12
+nextflow run nf-core/ampliseq -r 2.10.0 -profile uppmax -params-file /home/abusiddi/SLUBI/scripts/nf-params.json --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --min_frequency 5 --min_samples 2 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality -bg -work-dir "./work2" -resume --skip_taxonomy > log12.txt
+
 
 
 
