@@ -414,7 +414,8 @@ done
 echo "sybsampling job finished at $(date)"
 ```
 
-now with reads limit 1st Qu.: 68017  
+
+# now with reads limit 1st Qu.: 68017  
 `sbatch subsample_v2.sh`
 
 done
@@ -544,6 +545,21 @@ Incompatible parameters: `--sbdiexport` expects taxa annotation and therefore ex
 # run12
 nextflow run nf-core/ampliseq -r 2.10.0 -profile uppmax -params-file /home/abusiddi/SLUBI/scripts/nf-params.json --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --min_frequency 5 --min_samples 2 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality -bg -work-dir "./work2" -resume --skip_taxonomy > log12.txt
 
+
+raw subsumpled files are not in gzip format , change
+# format file to gz
+```
+cd /proj/uppstore2018171/abu/tanasp/P22702/01-Ampliseq-Analysis/subsampled/
+gzip --force *.fastq.gz
+```
+then 
+```
+for file in *.fastq.gz.gz; do
+     mv "${file}" "${file%.gz.gz}.gz"
+done
+```
+# run13
+nextflow run nf-core/ampliseq -r 2.10.0 -profile uppmax -params-file /home/abusiddi/SLUBI/scripts/nf-params.json --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --min_frequency 5 --min_samples 2 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality -bg -work-dir "./work2" -resume --skip_taxonomy > log13.txt
 
 
 
