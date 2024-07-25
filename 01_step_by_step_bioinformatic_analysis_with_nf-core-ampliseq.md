@@ -562,5 +562,21 @@ done
 nextflow run nf-core/ampliseq -r 2.10.0 -profile uppmax -params-file /home/abusiddi/SLUBI/scripts/nf-params.json --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --min_frequency 5 --min_samples 2 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality -bg -work-dir "./work2" -resume --skip_taxonomy > log13.txt
 
 
+# run14
+nextflow run nf-core/ampliseq -r 2.10.0 -profile uppmax -params-file /home/abusiddi/SLUBI/scripts/nf-params.json --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --min_frequency 5 --min_samples 2 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality -bg -work-dir "./work2" -resume > log14.txt
 
+# run15
+nextflow run nf-core/ampliseq -r 2.10.0 -profile uppmax -params-file /home/abusiddi/SLUBI/scripts/nf-params.json --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --min_frequency 5 --min_samples 2 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality -bg -work-dir "./work2" -resume > log15.txt
+
+
+# run16
+nextflow run nf-core/ampliseq -r 2.10.0 -profile uppmax -params-file /home/abusiddi/SLUBI/scripts/nf-params.json --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --min_frequency 5 --min_samples 2 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality -bg -work-dir "./work2" -resume --dada_ref_tax_custom "/proj/naiss2023-23-270/nobackup/nxf/tanasp/sh_qiime_release_04.04.2024.tgz" --qiime_ref_tax_custom "/proj/naiss2023-23-270/nobackup/nxf/tanasp/sh_qiime_release_04.04.2024.tgz" > log16.txt
+
+--skip_dada_addspecies
+# run17
+nextflow run nf-core/ampliseq -r 2.10.0 -profile uppmax -params-file /home/abusiddi/SLUBI/scripts/nf-params.json --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --min_frequency 5 --min_samples 2 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality -bg -work-dir "./work2" -resume --dada_ref_tax_custom "/proj/naiss2023-23-270/nobackup/nxf/tanasp/sh_qiime_release_04.04.2024.tgz" --qiime_ref_tax_custom "/proj/naiss2023-23-270/nobackup/nxf/tanasp/sh_qiime_release_04.04.2024.tgz" --skip_dada_addspecies > log17.txt
+
+database
+# run18
+nextflow run nf-core/ampliseq -r 2.10.0 -profile uppmax -params-file /home/abusiddi/SLUBI/scripts/nf-params.json --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --min_frequency 5 --min_samples 2 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality -bg -work-dir "./work2" -resume --dada_ref_tax_custom "/proj/naiss2023-23-270/nobackup/nxf/tanasp/sh_qiime_release_04.04.2024/" --qiime_ref_tax_custom "/proj/naiss2023-23-270/nobackup/nxf/tanasp/sh_qiime_release_04.04.2024/" --skip_dada_addspecies > log18.txt
 
