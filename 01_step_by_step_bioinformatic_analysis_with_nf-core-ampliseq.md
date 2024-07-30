@@ -603,3 +603,20 @@ nextflow run nf-core/ampliseq -r dev -profile uppmax -params-file /home/abusiddi
 
 # run24
 nextflow run nf-core/ampliseq -r dev -profile uppmax -params-file /home/abusiddi/SLUBI/scripts/nf-params_v2.json --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --min_frequency 5 --min_samples 2 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality -bg -work-dir "./work2" -resume --qiime_ref_tax_custom "/proj/naiss2023-23-270/nobackup/nxf/tanasp/sh_qiime_release_04.04.2024.tgz" > log24.txt
+
+
+##### Now with 2nd batch of subsample
+
+# Extract sampleID from sample_sheet_v1.csv
+cut -f1 /home/abusiddi/SLUBI/scripts/sample_sheet_v2.csv > /home/abusiddi/SLUBI/scripts/sample_sheet_v2_ids.txt
+# Extract sampleID from metadata_2024_07_22.txt (assuming it's a tab-delimited file)
+cut -f1 /home/abusiddi/SLUBI/scripts/metadata_2024_07_22.txt > /home/abusiddi/SLUBI/scripts/metadata_v2_ids.txt
+# Find common sample IDs
+comm -12 <(sort /home/abusiddi/SLUBI/scripts/sample_sheet_v2_ids.txt) <(sort /home/abusiddi/SLUBI/scripts/metadata_v2_ids.txt) > /home/abusiddi/SLUBI/scripts/common_ids_v2.txt
+# Filter sample_sheet_v1.csv based on common sample IDs
+awk 'NR==FNR{a[$1]; next} FNR==1 || $1 in a' /home/abusiddi/SLUBI/scripts/common_ids_v2.txt /home/abusiddi/SLUBI/scripts/sample_sheet_v2.csv > /home/abusiddi/SLUBI/scripts/sub_sample_sheet_v2.tsv
+# Filter metadata_2024_07_22.txt based on common sample IDs
+awk 'NR==FNR{a[$1]; next} FNR==1 || $1 in a' /home/abusiddi/SLUBI/scripts/common_ids_v2.txt /home/abusiddi/SLUBI/scripts/metadata_2024_07_22.txt > /home/abusiddi/SLUBI/scripts/sub_metadata_2024_07_22_v2.txt
+
+# run25
+nextflow run nf-core/ampliseq -r dev -profile uppmax -params-file /home/abusiddi/SLUBI/scripts/nf-params_v3.json --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --min_frequency 5 --min_samples 2 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality -bg -work-dir "./work3" --qiime_ref_tax_custom "/proj/naiss2023-23-270/nobackup/nxf/tanasp/sh_qiime_release_04.04.2024.tgz" > log25.txt
