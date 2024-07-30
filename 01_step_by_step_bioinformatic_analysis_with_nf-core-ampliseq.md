@@ -604,6 +604,11 @@ nextflow run nf-core/ampliseq -r dev -profile uppmax -params-file /home/abusiddi
 # run24
 nextflow run nf-core/ampliseq -r dev -profile uppmax -params-file /home/abusiddi/SLUBI/scripts/nf-params_v2.json --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --min_frequency 5 --min_samples 2 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality -bg -work-dir "./work2" -resume --qiime_ref_tax_custom "/proj/naiss2023-23-270/nobackup/nxf/tanasp/sh_qiime_release_04.04.2024.tgz" > log24.txt
 
+alpha rarefaction
+nextflow run nf-core/ampliseq -r dev -profile uppmax -params-file /home/abusiddi/SLUBI/scripts/nf-params_v2.1.json --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --min_frequency 5 --min_samples 2 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality -bg -work-dir "./work2" -resume --qiime_ref_tax_custom "/proj/naiss2023-23-270/nobackup/nxf/tanasp/sh_qiime_release_04.04.2024.tgz" > log24.1.txt
+
+nextflow run nf-core/ampliseq -r dev -profile uppmax -params-file /home/abusiddi/SLUBI/scripts/nf-params_v2.2.json --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --min_frequency 5 --min_samples 2 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality -bg -work-dir "./work2" -resume --qiime_ref_tax_custom "/proj/naiss2023-23-270/nobackup/nxf/tanasp/sh_qiime_release_04.04.2024.tgz" > log24.2.txt
+
 
 ##### Now with 2nd batch of subsample
 
@@ -620,3 +625,19 @@ awk 'NR==FNR{a[$1]; next} FNR==1 || $1 in a' /home/abusiddi/SLUBI/scripts/common
 
 # run25
 nextflow run nf-core/ampliseq -r dev -profile uppmax -params-file /home/abusiddi/SLUBI/scripts/nf-params_v3.json --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --min_frequency 5 --min_samples 2 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality -bg -work-dir "./work3" --qiime_ref_tax_custom "/proj/naiss2023-23-270/nobackup/nxf/tanasp/sh_qiime_release_04.04.2024.tgz" > log25.txt
+
+
+
+# format file to gz
+```
+cd /proj/uppstore2018171/abu/tanasp/P22702/01-Ampliseq-Analysis/subsampled_v2/
+gzip --force *.fastq.gz
+```
+then 
+```
+for file in *.fastq.gz.gz; do
+     mv "${file}" "${file%.gz.gz}.gz"
+done
+```
+
+nextflow run nf-core/ampliseq -r dev -profile uppmax -params-file /home/abusiddi/SLUBI/scripts/nf-params_v3.json --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --min_frequency 5 --min_samples 2 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality -bg -work-dir "./work3" --qiime_ref_tax_custom "/proj/naiss2023-23-270/nobackup/nxf/tanasp/sh_qiime_release_04.04.2024.tgz" > log25.1txt
