@@ -649,3 +649,13 @@ Full run 1
 ```
 nextflow run nf-core/ampliseq -r dev -profile uppmax -params-file /home/abusiddi/SLUBI/scripts/nf-params_v4.json --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --min_frequency 5 --min_samples 2 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality -bg -work-dir "./work4" --qiime_ref_tax_custom "/proj/naiss2023-23-270/nobackup/nxf/tanasp/sh_qiime_release_04.04.2024.tgz" > log_full_run1.txt
 ```
+
+
+### 2024_10_06
+ITSx and all eukariots
+
+resume Full run 1
+```
+nextflow run nf-core/ampliseq -r dev -profile uppmax -params-file /home/abusiddi/SLUBI/scripts/nf-params_v4.json --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --min_frequency 5 --min_samples 2 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality -bg -work-dir "./work5" -resume --dada_ref_taxonomy "unite-alleuk" --qiime_ref_taxonomy "unite-alleuk" --outdir "results_2024_10_06" > log_full_run1_extended.txt
+
+```
