@@ -362,4 +362,4 @@ finished successfully
 
 Rest analysis was done on rstudio with R scripts (qurato scripts) as .qmd script
 
-more on Zenodo [repository](link)
+more on Zenodo repository[will be available soon!](link)
