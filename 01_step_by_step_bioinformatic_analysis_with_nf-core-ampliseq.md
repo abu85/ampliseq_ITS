@@ -75,7 +75,7 @@ Upon execution of the command, $USER will be replaced with your login name.
 My case these three commands were look like this:
 ```
 export NXF_OPTS='-Xms1g -Xmx4g'
-export NXF_HOME=$/proj/snic2022-22-289/nobackup/abu/ampliseq_its/real_run/
+export NXF_HOME=$/proj_launch_dir/
 export NXF_TEMP=${SNIC_TMP:-$HOME/glob/nxftmp}
 ```
 
@@ -306,6 +306,8 @@ export NXF_OPTS='-Xms1g -Xmx4g'
 export NXF_HOME=$/proj/snic2022-22-289/nobackup/abu/ampliseq_its/
 export NXF_TEMP=${SNIC_TMP:-$HOME/glob/nxftmp}
 ```
+Details of the Parameters file ('.json' file) 
+
 ```
 nextflow run \ # nextflow command
 nf-core/ampliseq \ # calling ampliseq pipeline
@@ -337,30 +339,55 @@ nf-core/ampliseq \ # calling ampliseq pipeline
 > amplseq_real_run_full_log_x.txt # log file will be saves as this name in the running directory
 ```
 
-Real run used in the paper
-```
-nextflow run nf-core/ampliseq --input /proj/snic2022-22-289/nobackup/abu/ampliseq_its/input_files -profile uppmax --max_cpus 20 --max_memory 36.GB --project snic2022-22-289 --FW_primer GCATCGATGAAGAACGCAGC --RV_primer TCCTCCGCTTATTGATATGC --dada_ref_taxonomy unite-fungi --cut_dada_ref_taxonomy --qiime_ref_taxonomy unite-fungi --email abu.siddique@slu.se --metadata /proj/snic2022-22-289/nobackup/abu/ampliseq_its/samplesheet.tsv --cut_its its2 --illumina_pe_its --trunclenf 223 --trunclenr 162 --exclude_taxa "mitochondria,chloroplast,archea,bacteria" --min_frequency 1 --min_samples 1 -bg -resume --outdir /proj/snic2022-22-289/nobackup/abu/ampliseq_its/real_run/results --ignore_empty_input_files --skip_ancom --ignore_failed_trimming > amplseq_real_run_full_log_x.txt
-```
-
-
-##### Take result folders and do downstream analysis in R 
-
-rest of the analysis was done with R in Rstudio *see the `r_analysis_script.qmd` script* 
-
-
 
 # Downsampled: 
-nextflow nf-core command 
 
-Launch directory: 
+## Extract sampleID from sample_sheet_v1.csv
+cut -f1 /home/abusiddi/SLUBI/scripts/sample_sheet_v2.csv > /home/abusiddi/SLUBI/scripts/sample_sheet_v2_ids.txt
+## Extract sampleID from metadata_2024_07_22.txt (assuming it's a tab-delimited file)
+cut -f1 /home/abusiddi/SLUBI/scripts/metadata_2024_07_22.txt > /home/abusiddi/SLUBI/scripts/metadata_v2_ids.txt
+## Find common sample IDs
+comm -12 <(sort /home/abusiddi/SLUBI/scripts/sample_sheet_v2_ids.txt) <(sort /home/abusiddi/SLUBI/scripts/metadata_v2_ids.txt) > /home/abusiddi/SLUBI/scripts/common_ids_v2.txt
+## Filter sample_sheet_v1.csv based on common sample IDs
+awk 'NR==FNR{a[$1]; next} FNR==1 || $1 in a' /home/abusiddi/SLUBI/scripts/common_ids_v2.txt /home/abusiddi/SLUBI/scripts/sample_sheet_v2.csv > /home/abusiddi/SLUBI/scripts/sub_sample_sheet_v2.tsv
+## Filter metadata_2024_07_22.txt based on common sample IDs
+awk 'NR==FNR{a[$1]; next} FNR==1 || $1 in a' /home/abusiddi/SLUBI/scripts/common_ids_v2.txt /home/abusiddi/SLUBI/scripts/metadata_2024_07_22.txt > /home/abusiddi/SLUBI/scripts/sub_metadata_2024_07_22_v2.txt
+
+## nf-core/amplisecq command
+ 
+nextflow run nf-core/ampliseq -r dev -profile uppmax -params-file /home/abusiddi/SLUBI/scripts/nf-params_v3.json --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --min_frequency 5 --min_samples 2 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality -bg -work-dir "./work3" --qiime_ref_tax_custom "/proj/naiss2023-23-270/nobackup/nxf/tanasp/sh_qiime_release_04.04.2024.tgz" > log25.txt
+
+Error
+
+### change file to the right format (.gz)
 ```
-/crex/proj/uppstore2018171/abu/tanasp/nxf_analysis
+cd /proj/uppstore2018171/abu/tanasp/P22702/01-Ampliseq-Analysis/subsampled_v2/
+gzip --force *.fastq.gz
+```
+then 
+```
+for file in *.fastq.gz.gz; do
+     mv "${file}" "${file%.gz.gz}.gz"
+done
 ```
 
-Main run:
+# nextflow nf-core command 
+
+Downsampled data Command
+
+Parameters file:
+
 ```
-nextflow run nf-core/ampliseq -r 2.10.0 -profile uppmax -params-file /home/abusiddi/SLUBI/scripts/nf-params_v3.json --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --min_frequency 5 --min_samples 2 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality -bg -work-dir ./work3 --qiime_ref_tax_custom /proj/naiss2023-23-270/nobackup/nxf/tanasp/sh_qiime_release_04.04.2024.tgz -resume
+nextflow run nf-core/ampliseq -r dev -profile uppmax -params-file /home/abusiddi/SLUBI/scripts/nf-params_v3.json --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --min_frequency 5 --min_samples 2 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality -bg -work-dir "./work3" --qiime_ref_tax_custom "/proj/naiss2023-23-270/nobackup/nxf/tanasp/sh_qiime_release_04.04.2024.tgz" > log25.1txt
 ```
+Finished unsuccessfully, but key results are obtained
 
 
-# Full data
+Full data command
+
+Parameters file:
+
+```
+nextflow run nf-core/ampliseq -r dev -profile uppmax -params-file /home/abusiddi/SLUBI/scripts/nf-params_v4.json --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --min_frequency 5 --min_samples 2 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality -bg -work-dir "./work4" --qiime_ref_tax_custom "/proj/naiss2023-23-270/nobackup/nxf/tanasp/sh_qiime_release_04.04.2024.tgz" > log_full_run1.txt
+```
+finished successfullt
