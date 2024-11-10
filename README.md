@@ -1,7 +1,9 @@
-# Adapted nfcore/ampliseq pipeline summary and downstream analaysis in R
+# Bioinformatic pipeline and commands
+## Adapted nfcore/ampliseq pipeline summary
 
-This is the repository for the upcoming paper
+Step by step bioinformatic pipeline and commands are described on this file [01_step_by_step_bioinformatic_analysis_with_nf-core-ampliseq.md](https://github.com/abu85/ampliseq_ITS/blob/main/01_step_by_step_bioinformatic_analysis_with_nf-core-ampliseq.md)
 
+![](https://raw.githubusercontent.com/nf-core/ampliseq/2.11.0//docs/images/ampliseq_workflow.png)
 Tittle: Genotypes, Tannin Capacity, and Seasonality Influence the Structure and Function of Symptomless Fungal Communities in Aspen Leaves, Regardless of Historical Nitrogen Addition 
 Authors: Abu Bakar Siddique1, Abu Bakar Siddique2,3, Lovely Mahawar2, Benedicte Riber Albrectsen2*
 
