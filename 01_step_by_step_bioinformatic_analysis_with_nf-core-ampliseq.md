@@ -1,6 +1,5 @@
 # Bioinformatic analysis with [nf-core/ampliseq](https://nf-co.re/ampliseq/2.3.2) pipeline
 
-### step_by_step_bioinformatic_analysis_with_nf-core-ampliseq
 <font size=20>__ITS ampliseq analysis with nf-core/ampliseq pipeline (step by step)__</font>
 
 1. [Prepare HPC (here its Uppmax) & environment](#sec1) </br>
@@ -117,37 +116,9 @@ Recently, all nf-core pipelines have been made available on UPPMAX (rackham and 
 ```
 module load nf-core-pipelines/latest
 ```
-Loading this module exposes the variable $NF_CORE_PIPELINES. This is the location on the server where all pipelines are stored. Have a look at all pipelines and versions that are available
+Loading this module exposes the variable $NF_CORE_PIPELINES. This is the location on the server where all pipelines are stored. 
 
-tree -L 2 $NF_CORE_PIPELINES -I 'singularity_cache_dir'
-
-For an example: this will look like this:
-/sw/bioinfo/nf-core-pipelines/latest/rackham
-|-- airrflow
-|   |-- 1.0.0
-|   |-- 1.1.0
-|   |-- 1.2.0
-|   `-- 2.0.0
-|-- ampliseq
-|   |-- 1.0.0
-|   |-- 1.1.0
-|   |-- 1.1.1
-|   |-- 1.1.2
-|   |-- 1.1.3
-|   |-- 1.2.0
-|   |-- 2.0.0
-|   |-- 2.1.0
-|   |-- 2.1.1
-|   |-- 2.2.0
-|   |-- 2.3.0
-|   `-- 2.3.1
-|-- ampliseq
-|   |-- 1.0.0
-
-This directory also contains all necessary software for all pipelines in a folder called singularity_cache_dir. This means you do not have to install any tools at all; they all are here packaged in singularity containers!
-
-Note
-
+Note:
 nf-core also comes as a Python package that is totally separate to Nextflow and is not required to run Nextflow pipelines. It does however offer some convenience functions to make your life a little easier. A description on how to install this package can be found here. This is useful if you want to run nf-core pipelines outside of UPPMAX or want to use some of the convenience functions included in the nf-core package.
 
 If your hpc or PC do not have them you must load them ahead of running the actual commands written bellow
@@ -306,7 +277,7 @@ export NXF_OPTS='-Xms1g -Xmx4g'
 export NXF_HOME=$/proj/snic2022-22-289/nobackup/abu/ampliseq_its/
 export NXF_TEMP=${SNIC_TMP:-$HOME/glob/nxftmp}
 ```
-Details of the Parameters file ('.json' file) 
+Explanation of the Parameters file ('.json' file) used here
 
 ```
 nextflow run \ # nextflow command
@@ -332,7 +303,7 @@ nf-core/ampliseq \ # calling ampliseq pipeline
 --min_samples 1 \ # retain features (ASVs or OTUs) that are present in at least one sample:
 -bg \ # run pipeline in the backgroun
 -resume \ # start from where it previously stopped
---outdir /proj/snic2022-22-289/nobackup/abu/ampliseq_its/real_run/results \ # where the result will be saved
+--outdir results \ # where the result will be saved
 --ignore_empty_input_files \ # empty samples will be discarded
 --skip_ancom \ # avaid assigning ANCOM features
 --ignore_failed_trimming \ # samples will be vaoided who fail to exist after trimming
