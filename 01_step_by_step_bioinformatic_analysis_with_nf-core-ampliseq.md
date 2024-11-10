@@ -2,7 +2,7 @@
 
 <font size=20>__ITS ampliseq analysis with nf-core/ampliseq pipeline (step by step)__</font>
 
-1. [Prepare HPC (here its Uppmax) & environment](#sec1) </br>
+1. [Prepare HPC (here its NAISS or Uppmax) & environment](#sec1) </br>
     1.1. [Log in](#sec1.1)</br>
     1.2. [Background (Tmux) set up](#sec1.2)</br>
 2. [Nextflow setup](#sec2)</br>
