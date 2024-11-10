@@ -1,17 +1,6 @@
 # Bioinformatic analysis with [nf-core/ampliseq](https://nf-co.re/ampliseq/2.3.2) pipeline
 
 ### step_by_step_bioinformatic_analysis_with_nf-core-ampliseq
-This analysis was with the following paper:
-
-Genotype, Tannin Capacity, and Seasonality Influence the Structure and Function of Symptomless Fungal Communities in Aspen Leaves, Regardless of Historical Nitrogen Addition
-Abu Bakar Siddique1, Abu Bakar Siddique2,3,  Lovely Mahawar2,  Benedicte Riber Albrectsen2*
-
-1. Department of Plant Biology, Swedish University of Agricultural Sciences, 75007, Uppsala, Sweden. 
-2. Umeå Plant Science Centre (UPSC), Department of Plant Physiology, Umeå University, 90187 Umeå, Sweden. 
-3. Tasmanian Institute of Agriculture (TIA), University of Tasmania, Prospect 7250, Tasmania, Australia.
-*Correspondence: benedicte.albrectsen@umu.se 
-
----------- Abu Bakar Siddique, Dr.rer.nat., SLUBI, SLU
 <font size=20>__ITS ampliseq analysis with nf-core/ampliseq pipeline (step by step)__</font>
 
 1. [Prepare HPC (here its Uppmax) & environment](#sec1) </br>
@@ -357,3 +346,21 @@ nextflow run nf-core/ampliseq --input /proj/snic2022-22-289/nobackup/abu/amplise
 ##### Take result folders and do downstream analysis in R 
 
 rest of the analysis was done with R in Rstudio *see the `r_analysis_script.qmd` script* 
+
+
+
+# Downsampled: 
+nextflow nf-core command 
+
+Launch directory: 
+```
+/crex/proj/uppstore2018171/abu/tanasp/nxf_analysis
+```
+
+Main run:
+```
+nextflow run nf-core/ampliseq -r 2.10.0 -profile uppmax -params-file /home/abusiddi/SLUBI/scripts/nf-params_v3.json --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --min_frequency 5 --min_samples 2 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality -bg -work-dir ./work3 --qiime_ref_tax_custom /proj/naiss2023-23-270/nobackup/nxf/tanasp/sh_qiime_release_04.04.2024.tgz -resume
+```
+
+
+# Full data
