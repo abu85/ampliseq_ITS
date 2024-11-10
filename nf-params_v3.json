@@ -1,0 +1,23 @@
+{
+    "input_folder": "/proj/uppstore2018171/abu/tanasp/P22702/01-Ampliseq-Analysis/input/",
+    "FW_primer": "GCATCGATGAAGAACGCAGC",
+    "RV_primer": "TCCTCCGCTTATTGATATGC",
+    "outdir": "results_2024_09_16_v1",
+    "save_intermediates": true,
+    "email": "abu.siddique@slu.se",
+    "illumina_pe_its": true,
+    "ignore_empty_input_files": true,
+    "trunclenf": 223,
+    "trunclenr": 162,
+    "ignore_failed_filtering": true,
+    "sample_inference": "pooled",
+    "vsearch_cluster": true,
+    "filter_ssu": "bac,arc,mito,euk",
+    "dada_ref_taxonomy": "unite-fungi",
+    "dada_addspecies_allowmultiple": true,
+    "dada_taxonomy_rc": true,
+    "addsh": true,
+    "cut_its": "its2",
+    "exclude_taxa": "mitochondria,chloroplast,archaea,bacteria",
+    "diversity_rarefaction_depth": 8000
+}
