@@ -316,9 +316,14 @@ nf-core/ampliseq \ # calling ampliseq pipeline
 ## Extract sampleID from sample_sheet_v1.csv
 cut -f1 /home/abusiddi/SLUBI/scripts/sample_sheet_v2.csv > /home/abusiddi/SLUBI/scripts/sample_sheet_v2_ids.txt
 
-sample_sheet_v2.csv file has 329 samples
-metadata_2024_07_22.txt file has 353 samples
-sub_metadata_2024_07_22_v2.txt file has 303
+The input (/proj/uppstore2018171/abu/tanasp/P22702/01-Ampliseq-Analysis/input/) has `379` samples
+
+sample_sheet_v2.csv file has `329` samples
+
+metadata_2024_07_22.txt file has `353` samples
+
+sub_metadata_2024_07_22_v2.txt file has `303`
+
 
 ## Extract sampleID from metadata_2024_07_22.txt (assuming it's a tab-delimited file)
 cut -f1 /home/abusiddi/SLUBI/scripts/metadata_2024_07_22.txt > /home/abusiddi/SLUBI/scripts/metadata_v2_ids.txt
