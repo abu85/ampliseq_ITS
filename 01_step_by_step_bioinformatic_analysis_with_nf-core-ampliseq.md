@@ -668,3 +668,71 @@ nextflow run nf-core/ampliseq -r dev -profile uppmax -params-file /home/abusiddi
 nextflow run nf-core/ampliseq -r dev -profile uppmax -params-file /home/abusiddi/SLUBI/scripts/nf-params_v4.json --max_cpus 20 --max_memory 128.GB --project naiss2024-22-116 --min_frequency 5 --min_samples 2 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality -bg -work-dir "./work5" -resume --dada_ref_taxonomy "unite-alleuk" --qiime_ref_tax_custom "/proj/naiss2023-23-270/nobackup/nxf/tanasp/sh_qiime_release_04.04.2024.tgz" --outdir "results_2024_10_06" -resume > log_full_run1_extended_resume.txt
 
 ```
+
+
+
+# 2024-11-25
+## Downsampled again on all downsampled
+working dir: /proj/naiss2023-23-270/nobackup/nxf/tanasp
+downsampled are here: /proj/uppstore2018171/abu/tanasp/P22702/01-Ampliseq-Analysis/subsampled_v2/
+
+```
+module load tmux
+tmux new -s ampliseq_its # or any other name you like
+```
+
+```
+tmux attach -t ampliseq_its
+tmux set mouse on  # enable mouse support for things like scrolling and selecting text
+```
+##### 2. Nextflow setup (Nextflow	21.10.6)
+
+Installation
+```
+module purge                        # Clears all existing loaded modules, to start fresh
+module load uppmax bioinfo-tools    # Base UPPMAX environment modules, needed for everything else
+module load Nextflow                # Note: Capital N!
+```
+
+
+# Don't let Java get carried away and use huge amounts of memory
+```
+export NXF_OPTS='-Xms1g -Xmx4g'
+export NXF_HOME=/proj/naiss2023-23-270/nobackup/nxf/tanasp/
+export NXF_TEMP=${SNIC_TMP:-$HOME/glob/nxftmp}
+```
+
+nf-params-downsampled.json
+```
+{
+    "input_folder": "/proj/uppstore2018171/abu/tanasp/P22702/01-Ampliseq-Analysis/subsampled_v2/",
+    "FW_primer": "GCATCGATGAAGAACGCAGC",
+    "RV_primer": "TCCTCCGCTTATTGATATGC",
+    "outdir": "downsampled_results",
+    "save_intermediates": true,
+    "email": "abu.siddique@slu.se",
+    "illumina_pe_its": true,
+    "ignore_empty_input_files": true,
+    "trunclenf": 223,
+    "trunclenr": 162,
+    "ignore_failed_filtering": true,
+    "sample_inference": "pooled",
+    "vsearch_cluster": true,
+    "filter_ssu": "bac,arc,mito,euk",
+    "dada_ref_taxonomy": "unite-fungi",
+    "dada_addspecies_allowmultiple": true,
+    "dada_taxonomy_rc": true,
+    "addsh": true,
+    "cut_its": "its2",
+    "exclude_taxa": "mitochondria,chloroplast,archaea,bacteria",
+    "diversity_rarefaction_depth": 8000
+}
+```
+
+nano /home/abusiddi/SLUBI/scripts/nf-params-downsampled.json
+
+Main downsampled_run:
+
+nextflow run nf-core/ampliseq -r v2.11.0dev-g6549c5b -profile uppmax -params-file /home/abusiddi/SLUBI/scripts/nf-params-downsampled.json --max_cpus 20 --max_memory 128.GB --project naiss2023-22-1307 --min_frequency 5 --min_samples 2 --ignore_empty_input_files --ignore_failed_trimming --skip_fastqc --skip_dada_quality -bg -work-dir "./work_downsampled" --qiime_ref_tax_custom "/proj/naiss2023-23-270/nobackup/nxf/tanasp/sh_qiime_release_04.04.2024.tgz" > log_downsampled.txt
+
+
