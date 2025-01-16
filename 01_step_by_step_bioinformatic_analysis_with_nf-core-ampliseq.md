@@ -370,6 +370,6 @@ nextflow run nf-core/ampliseq -r dev -profile uppmax -params-file /home/abusiddi
 finished successfully
 
 
-Rest analysis was done on rstudio with R scripts (qurato scripts) as .qmd script
+Rest analysis was done on rstudio with R scripts (qurato scripts) as .qmd script.
 
-more on Zenodo repository[will be available soon!](link)
+### *** Details on the bioinformatic method, data & results can be found on Zenodo repository [link](https://zenodo.org/records/10839669))
